@@ -8,7 +8,6 @@ export default function Home() {
     <div className="font-sans">
       <HomePage />
       <Recorder />
-      <Conversation />
     </div>
 
   );
