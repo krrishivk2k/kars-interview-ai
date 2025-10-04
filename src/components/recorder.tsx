@@ -103,10 +103,11 @@ export default function CameraRecorder() {
         try {
             // Clear previous recording chunks when starting new recording
             setChunks([]);
+            chunksRef.current = [];
             setRecordedVideoUrl(null);
             setRecordedBlob(null);
             
-            // Request audio permission only when starting to record
+            // Request microphone audio
             const audioStream = await navigator.mediaDevices.getUserMedia({
                 audio: true
             });
@@ -207,8 +208,6 @@ export default function CameraRecorder() {
             setRecorder(newRecorder);
             setRecording(true);
 
-
-
             // Start the conversation with your agent
             await conversation.startSession({
                 agentId: 'agent_5801k6r2p237f0j9qm82jkk1bcmq', // Replace with your agent ID
@@ -282,6 +281,8 @@ export default function CameraRecorder() {
         <div className="flex flex-col items-center">
             <p>Status: {conversation.status}</p>
             <p>Agent is {conversation.isSpeaking ? 'speaking' : 'listening'}</p>
+            <p>Recording: {recording ? 'Yes' : 'No'}</p>
+            <p>Has recorded video: {recordedBlob ? 'Yes' : 'No'}</p>
         </div>
         
         {/* Debug info */}
