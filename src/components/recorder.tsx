@@ -10,6 +10,7 @@ export default function CameraRecorder() {
     const [recorder, setRecorder] = useState<MediaRecorder | null>(null);
     const [recording, setRecording] = useState<boolean>(false);
     const [chunks, setChunks] = useState<Blob[]>([]);
+    const chunksRef = useRef<Blob[]>([]);
     const [previewStream, setPreviewStream] = useState<MediaStream | null>(null);
     const [recordedVideoUrl, setRecordedVideoUrl] = useState<string | null>(null);
     const [recordedBlob, setRecordedBlob] = useState<Blob | null>(null);
@@ -93,10 +94,11 @@ export default function CameraRecorder() {
         try {
             // Clear previous recording chunks when starting new recording
             setChunks([]);
+            chunksRef.current = [];
             setRecordedVideoUrl(null);
             setRecordedBlob(null);
             
-            // Request audio permission only when starting to record
+            // Request microphone audio
             const audioStream = await navigator.mediaDevices.getUserMedia({
                 audio: true
             });
@@ -118,30 +120,29 @@ export default function CameraRecorder() {
             // Create a new stream with both video and audio
             const recordingStream = new MediaStream([videoTrack, audioTrack]);
             
-            // Check for MP4 support first, fallback to WebM
-            const mimeType = MediaRecorder.isTypeSupported('video/mp4') 
-                ? 'video/mp4' 
-                : 'video/webm;codecs=vp9,opus';
-            
             const newRecorder = new MediaRecorder(recordingStream, {
-                mimeType: mimeType,
+                mimeType: "video/webm;codecs=vp9,opus",
             });
 
 
             newRecorder.ondataavailable = (e) => {
                 if (e.data.size > 0) {
+                    chunksRef.current.push(e.data);
                     setChunks((prev) => [...prev, e.data]);
                 }
             };
 
 
             newRecorder.onstop = () => {
-                const blob = new Blob(chunks, { type: mimeType });
+                // Get all chunks from the ref
+                const allChunks = [...chunksRef.current];
+                const blob = new Blob(allChunks, { type: "video/webm" });
                 const url = URL.createObjectURL(blob);
                 console.log("Video with audio URL:", url);
                 setRecordedBlob(blob);
                 setRecordedVideoUrl(url);
-                // Keep chunks for now - they'll be cleared when starting new recording
+                setChunks([]);
+                chunksRef.current = []; // Clear the ref
                 
                 // Stop the audio stream when recording stops
                 audioStream.getTracks().forEach(track => track.stop());
@@ -157,8 +158,6 @@ export default function CameraRecorder() {
             newRecorder.start();
             setRecorder(newRecorder);
             setRecording(true);
-
-
 
             // Start the conversation with your agent
             await conversation.startSession({
@@ -206,6 +205,8 @@ export default function CameraRecorder() {
         <div className="flex flex-col items-center">
             <p>Status: {conversation.status}</p>
             <p>Agent is {conversation.isSpeaking ? 'speaking' : 'listening'}</p>
+            <p>Recording: {recording ? 'Yes' : 'No'}</p>
+            <p>Has recorded video: {recordedBlob ? 'Yes' : 'No'}</p>
         </div>
         
         {recordedVideoUrl && recordedBlob && (
