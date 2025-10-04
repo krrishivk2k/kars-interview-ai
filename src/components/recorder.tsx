@@ -10,9 +10,12 @@ export default function CameraRecorder() {
     const [recorder, setRecorder] = useState<MediaRecorder | null>(null);
     const [recording, setRecording] = useState<boolean>(false);
     const [chunks, setChunks] = useState<Blob[]>([]);
+    const chunksRef = useRef<Blob[]>([]);
     const [previewStream, setPreviewStream] = useState<MediaStream | null>(null);
-    const [recordedVideoUrl, setRecordedVideoUrl] = useState<string | null>(null);
+    const [recordedVideoUrl, setRecordedVideoUrl] = useState<string | null>(null);;
     const [recordedBlob, setRecordedBlob] = useState<Blob | null>(null);
+    const [downloadUrl, setDownloadUrl] = useState<string | null>(null);
+    const [previewUrl, setPreviewUrl] = useState<string | null>(null);
 
     // agent states and variables
     const [selectedCompany, setSelectedCompany] = useState('Google');
@@ -75,6 +78,13 @@ export default function CameraRecorder() {
             if (previewStream) {
                 previewStream.getTracks().forEach(track => track.stop());
             }
+            // Clean up URLs
+            if (downloadUrl) {
+                URL.revokeObjectURL(downloadUrl);
+            }
+            if (previewUrl) {
+                URL.revokeObjectURL(previewUrl);
+            }
         };
     }, []);
 
@@ -118,30 +128,68 @@ export default function CameraRecorder() {
             // Create a new stream with both video and audio
             const recordingStream = new MediaStream([videoTrack, audioTrack]);
             
-            // Check for MP4 support first, fallback to WebM
-            const mimeType = MediaRecorder.isTypeSupported('video/mp4') 
-                ? 'video/mp4' 
-                : 'video/webm;codecs=vp9,opus';
+
+            // Try to find a supported MIME type
+            let mimeType = "video/webm;codecs=vp9,opus";
+            if (!MediaRecorder.isTypeSupported(mimeType)) {
+                mimeType = "video/webm;codecs=vp8,opus";
+                if (!MediaRecorder.isTypeSupported(mimeType)) {
+                    mimeType = "video/webm";
+                    if (!MediaRecorder.isTypeSupported(mimeType)) {
+                        mimeType = ""; // Let browser choose
+                    }
+                }
+            }
+            
+            console.log("Using MIME type:", mimeType);
             
             const newRecorder = new MediaRecorder(recordingStream, {
                 mimeType: mimeType,
+                videoBitsPerSecond: 2500000, // 2.5 Mbps for good quality
+                audioBitsPerSecond: 128000,  // 128 kbps for audio
+
             });
 
 
             newRecorder.ondataavailable = (e) => {
                 if (e.data.size > 0) {
-                    setChunks((prev) => [...prev, e.data]);
+                    console.log("Data chunk received:", e.data.size, "bytes");
+                    chunksRef.current.push(e.data);
+                    setChunks((prev) => {
+                        const newChunks = [...prev, e.data];
+                        console.log("Total chunks so far:", newChunks.length);
+                        return newChunks;
+                    });
                 }
             };
 
 
             newRecorder.onstop = () => {
-                const blob = new Blob(chunks, { type: mimeType });
+
+                console.log("Recording stopped, processing chunks...");
+                
+                // Get all chunks from the ref
+                const allChunks = [...chunksRef.current];
+                console.log("Creating blob with chunks:", allChunks.length);
+                
+                if (allChunks.length === 0) {
+                    console.error("No chunks recorded!");
+                    return;
+                }
+                
+                const blob = new Blob(allChunks, { type: mimeType || "video/webm" });
                 const url = URL.createObjectURL(blob);
                 console.log("Video with audio URL:", url);
+                console.log("Total chunks recorded:", allChunks.length);
+                console.log("Blob size:", blob.size, "bytes");
+                
+                // Store the blob and URLs for preview and download
                 setRecordedBlob(blob);
-                setRecordedVideoUrl(url);
-                // Keep chunks for now - they'll be cleared when starting new recording
+                setDownloadUrl(url);
+                setPreviewUrl(url); // Same URL for preview
+                setChunks([]);
+                chunksRef.current = []; // Clear the ref
+
                 
                 // Stop the audio stream when recording stops
                 audioStream.getTracks().forEach(track => track.stop());
@@ -154,7 +202,8 @@ export default function CameraRecorder() {
             };
 
 
-            newRecorder.start();
+            // Start recording with 1-second intervals to ensure data is captured frequently
+            newRecorder.start(1000);
             setRecorder(newRecorder);
             setRecording(true);
 
@@ -183,9 +232,36 @@ export default function CameraRecorder() {
 
     const stopRecording = useCallback(async () => {
         await conversation.endSession();
-        recorder?.stop();
+        if (recorder) {
+            recorder.stop();
+        }
         setRecording(false);
     }, [conversation, recorder]);
+
+    const convertToMp4 = useCallback(async () => {
+        if (!recordedBlob) return;
+        
+        // Note: This is a simplified approach. For production, you might want to use a library like FFmpeg.js
+        // or send the blob to a server for conversion
+        try {
+            // Create a new blob with MP4 MIME type (this is a basic approach)
+            const mp4Blob = new Blob([recordedBlob], { type: 'video/mp4' });
+            const mp4Url = URL.createObjectURL(mp4Blob);
+            
+            const link = document.createElement('a');
+            link.href = mp4Url;
+            link.download = `interview-recording-${new Date().toISOString().slice(0, 19).replace(/:/g, '-')}.mp4`;
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+            
+            // Clean up the URL
+            URL.revokeObjectURL(mp4Url);
+        } catch (error) {
+            console.error('Error converting to MP4:', error);
+            alert('Error converting to MP4. The file will be downloaded as WebM format.');
+        }
+    }, [recordedBlob]);
 
 
     return (
@@ -208,32 +284,40 @@ export default function CameraRecorder() {
             <p>Agent is {conversation.isSpeaking ? 'speaking' : 'listening'}</p>
         </div>
         
-        {recordedVideoUrl && recordedBlob && (
-            <div className="flex flex-col items-center gap-2">
-                <h3 className="text-lg font-semibold">Recorded Video:</h3>
+        {/* Debug info */}
+        {!recording && (
+            <div className="text-xs text-gray-500">
+                Debug: recording={recording.toString()}, hasBlob={!!recordedBlob}, hasPreview={!!previewUrl}
+            </div>
+        )}
+        
+        {/* Video preview and download - only show when recording is stopped and we have a recorded blob */}
+        {!recording && recordedBlob && previewUrl && (
+            <div className="flex flex-col items-center gap-4 mt-4">
+                <p className="text-sm text-gray-600">Recording completed! Preview your video:</p>
+                
+                {/* Video preview */}
                 <video 
-                    src={recordedVideoUrl} 
+                    src={previewUrl} 
                     controls 
                     className="w-96 rounded-xl shadow"
-                />
-                <div className="flex gap-2">
-                    <a 
-                        href={recordedVideoUrl} 
-                        download={`interview-recording.${recordedBlob.type.includes('mp4') ? 'mp4' : 'webm'}`}
-                        className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
-                    >
-                        📥 Download Video
-                    </a>
-                    <button 
-                        onClick={() => {
-                            setRecordedVideoUrl(null);
-                            setRecordedBlob(null);
-                        }}
-                        className="px-4 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-700"
-                    >
-                        🗑️ Clear
-                    </button>
-                </div>
+                    style={{ maxHeight: '300px' }}
+                    onLoadStart={() => console.log("Video load started")}
+                    onLoadedData={() => console.log("Video data loaded")}
+                    onError={(e) => console.error("Video error:", e)}
+                    onCanPlay={() => console.log("Video can play")}
+                >
+                    Your browser does not support the video tag.
+                </video>
+                
+                {/* Download button */}
+                <Button 
+                    onClick={convertToMp4} 
+                    className="px-4 py-2 bg-purple-600 text-white rounded"
+                    size="default"
+                >
+                    🎬 Download MP4
+                </Button>
             </div>
         )}
         </div>
