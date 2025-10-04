@@ -11,6 +11,8 @@ export default function CameraRecorder() {
     const [recording, setRecording] = useState<boolean>(false);
     const [chunks, setChunks] = useState<Blob[]>([]);
     const [previewStream, setPreviewStream] = useState<MediaStream | null>(null);
+    const [recordedVideoUrl, setRecordedVideoUrl] = useState<string | null>(null);
+    const [recordedBlob, setRecordedBlob] = useState<Blob | null>(null);
 
     // agent states and variables
     const [selectedCompany, setSelectedCompany] = useState('Google');
@@ -76,9 +78,24 @@ export default function CameraRecorder() {
         };
     }, []);
 
+    useEffect(() => {
+        // The cleanup function runs before the next effect or when unmounting.
+        return () => {
+            if (recordedVideoUrl) {
+                URL.revokeObjectURL(recordedVideoUrl);
+                console.log("Revoked old Blob URL:", recordedVideoUrl);
+            }
+        };
+    }, [recordedVideoUrl]);
+
 
     const startRecording = useCallback(async () => {
         try {
+            // Clear previous recording chunks when starting new recording
+            setChunks([]);
+            setRecordedVideoUrl(null);
+            setRecordedBlob(null);
+            
             // Request audio permission only when starting to record
             const audioStream = await navigator.mediaDevices.getUserMedia({
                 audio: true
@@ -101,8 +118,13 @@ export default function CameraRecorder() {
             // Create a new stream with both video and audio
             const recordingStream = new MediaStream([videoTrack, audioTrack]);
             
+            // Check for MP4 support first, fallback to WebM
+            const mimeType = MediaRecorder.isTypeSupported('video/mp4') 
+                ? 'video/mp4' 
+                : 'video/webm;codecs=vp9,opus';
+            
             const newRecorder = new MediaRecorder(recordingStream, {
-                mimeType: "video/webm;codecs=vp9,opus",
+                mimeType: mimeType,
             });
 
 
@@ -114,10 +136,12 @@ export default function CameraRecorder() {
 
 
             newRecorder.onstop = () => {
-                const blob = new Blob(chunks, { type: "video/webm" });
+                const blob = new Blob(chunks, { type: mimeType });
                 const url = URL.createObjectURL(blob);
                 console.log("Video with audio URL:", url);
-                setChunks([]);
+                setRecordedBlob(blob);
+                setRecordedVideoUrl(url);
+                // Keep chunks for now - they'll be cleared when starting new recording
                 
                 // Stop the audio stream when recording stops
                 audioStream.getTracks().forEach(track => track.stop());
@@ -165,16 +189,17 @@ export default function CameraRecorder() {
 
 
     return (
+        
         <div className="flex flex-col items-center gap-4">
         <video ref={videoRef} autoPlay playsInline className="w-96 rounded-xl shadow" />
         {/* Hidden audio element for monitoring */}
         {/* <audio ref={audioRef} autoPlay playsInline style={{ display: 'none' }} /> */}
         {(!recording && conversation.status !== 'connected') ? (
-            <Button onClick={startRecording} className="px-4 py-2 bg-green-600 text-white rounded" size="default">
+            <Button onClick={startRecording} className="px-4 py-2 bg-green-600 text-white rounded-(--radius)" size="lg">
                 🎥 Start Recording
             </Button>
         ) : (
-            <Button onClick={stopRecording} className="px-4 py-2 bg-red-600 text-white rounded" size="default" disabled={conversation.status !== 'connected'}>
+            <Button onClick={stopRecording} className="px-4 py-2 bg-red-600 text-white rounded-(--radius)" size="lg" disabled={conversation.status !== 'connected'}>
             ⏹️ Stop Recording
             </Button>
         )}
@@ -182,6 +207,37 @@ export default function CameraRecorder() {
             <p>Status: {conversation.status}</p>
             <p>Agent is {conversation.isSpeaking ? 'speaking' : 'listening'}</p>
         </div>
+        
+        {recordedVideoUrl && recordedBlob && (
+            <div className="flex flex-col items-center gap-2">
+                <h3 className="text-lg font-semibold">Recorded Video:</h3>
+                <video 
+                    src={recordedVideoUrl} 
+                    controls 
+                    className="w-96 rounded-xl shadow"
+                />
+                <div className="flex gap-2">
+                    <a 
+                        href={recordedVideoUrl} 
+                        download={`interview-recording.${recordedBlob.type.includes('mp4') ? 'mp4' : 'webm'}`}
+                        className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
+                    >
+                        📥 Download Video
+                    </a>
+                    <button 
+                        onClick={() => {
+                            setRecordedVideoUrl(null);
+                            setRecordedBlob(null);
+                        }}
+                        className="px-4 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-700"
+                    >
+                        🗑️ Clear
+                    </button>
+                </div>
+            </div>
+        )}
         </div>
+
+        
     );
 }

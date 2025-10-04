@@ -28,7 +28,6 @@ const transitionVariants = {
 export default function HomePage() {
     return (
         <>
-            <Header />
 
             <main className="overflow-hidden [--color-primary-foreground:var(--color-white)] [--color-primary:var(--color-green-600)]">
                 <section>
