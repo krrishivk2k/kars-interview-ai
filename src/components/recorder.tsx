@@ -9,6 +9,7 @@ import { getFirestore, doc, getDoc } from 'firebase/firestore';
 import { useRouter } from 'next/navigation';
 import { auth, db } from '../config/firebase-config';
 
+
 export default function CameraRecorder() {
     const videoRef = useRef<HTMLVideoElement>(null);
     // const audioRef = useRef<HTMLAudioElement>(null);
@@ -339,6 +340,18 @@ export default function CameraRecorder() {
         }
     }, [recordedBlob]);
 
+    const getAnalyze = (async (videoRef: any) => {
+        const user = auth.currentUser;
+        if (!user) {
+            return;
+        }
+        
+        const url = await getDownloadURL(videoRef);
+        const res = await fetch(url);
+        const blob = await res.blob();
+        const file = new File([blob], "video.mp4", { type: "video/mp4" });
+        
+    })
 
     // Show loading spinner while checking authentication
     if (loading) {
