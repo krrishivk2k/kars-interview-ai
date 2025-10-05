@@ -263,8 +263,15 @@ export default function ChatsPage() {
 
         const prompt = userMessage.content;
         const model = genAI.getGenerativeModel({ model: config.geminiModel });
-        const result = await model.generateContent(prompt);
-        const response = await result.response;
+        const chatSession = model.startChat({
+            history: currentChat.messages.map((m) => ({
+                role: m.role === 'user' ? 'user' : 'model',
+                parts: [{ text: m.content }],
+            })),
+        });
+
+        const result = await chatSession.sendMessage(inputMessage);
+        const response = result.response;
         const text = response.text();
 
         // Simulate AI response (replace with actual AI integration)

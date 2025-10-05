@@ -3,10 +3,10 @@
 
 export const config = {
   // Get your API key from: https://makersuite.google.com/app/apikey
-  googleApiKey: process.env.GOOGLE_API_KEY || '',
+  googleApiKey: process.env.NODE_PUBLIC_GEMINI_API_KEY || '',
   
   // Optional: Specify which model to use
   // Available models: gemini-pro, gemini-pro-vision, etc.
-  geminiModel: process.env.GEMINI_MODEL || ''
+  geminiModel:  'gemini-2.5-flash' ,
 
 };
