@@ -195,6 +195,7 @@ export default function ChatsPage() {
     const [jobDescription, setJobDescription] = useState<string>('')
     const [showJobDescriptionPrompt, setShowJobDescriptionPrompt] = useState(false)
     const [roleInfo, setRoleInfo] = useState<any>(null)
+    const [isAnalyzingInterview, setIsAnalyzingInterview] = useState(false)
     const messagesEndRef = useRef<HTMLDivElement>(null)
     const router = useRouter()
 
@@ -399,7 +400,7 @@ export default function ChatsPage() {
     const handleAnalysisComplete = async (result: any, transcript: { message: string; source: string }[]) => {
         setInterviewResult(result)
         setInterviewTranscript(transcript)
-        
+        setIsAnalyzingInterview(true)
         // Add both result and transcript as messages to the current chat
         if (currentChat && user) {
 
@@ -468,7 +469,7 @@ export default function ChatsPage() {
                 chat.id === currentChat.id ? updatedChat : chat
             ))
         }
-        
+        setIsAnalyzingInterview(false)
         // Close the modal
         setShowInterviewModal(false)
     }
@@ -833,7 +834,6 @@ export default function ChatsPage() {
             <div 
                 className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4"
                 onClick={(e) => {
-                    // Close modal when clicking on the backdrop
                     if (e.target === e.currentTarget) {
                         setShowInterviewModal(false)
                     }
@@ -853,9 +853,29 @@ export default function ChatsPage() {
                             <X className="w-4 h-4" />
                         </Button>
                     </div>
-                    <div className="p-4 overflow-y-auto max-h-[calc(90vh-80px)]">
-                        <Recorder onAnalysisComplete={handleAnalysisComplete} roleInfo={roleInfo} />
-                    </div>
+                    
+                    {isAnalyzingInterview ? (
+                        <div className="p-8 flex flex-col items-center justify-center min-h-[400px]">
+                            <div className="animate-spin rounded-full h-16 w-16 border-b-2 border-primary mb-4"></div>
+                            <h3 className="text-xl font-semibold mb-2">Analyzing Interview</h3>
+                            <p className="text-muted-foreground text-center max-w-md">
+                                Our AI is grading your interview performance and generating detailed feedback. 
+                                This may take a few moments...
+                            </p>
+                            <div className="mt-6 flex items-center gap-2 text-sm text-muted-foreground">
+                                <div className="w-2 h-2 bg-primary rounded-full animate-pulse"></div>
+                                <span>Processing video analysis...</span>
+                            </div>
+                            <div className="mt-2 flex items-center gap-2 text-sm text-muted-foreground">
+                                <div className="w-2 h-2 bg-primary rounded-full animate-pulse" style={{ animationDelay: '0.5s' }}></div>
+                                <span>Generating AI feedback...</span>
+                            </div>
+                        </div>
+                    ) : (
+                        <div className="p-4 overflow-y-auto max-h-[calc(90vh-80px)]">
+                            <Recorder onAnalysisComplete={handleAnalysisComplete} roleInfo={roleInfo} />
+                        </div>
+                    )}
                 </div>
             </div>
         )}
