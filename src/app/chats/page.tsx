@@ -25,6 +25,33 @@ import { cn } from '@/lib/utils'
 import { db } from '@/config/firebase-config'
 import { collection, addDoc, serverTimestamp, doc, updateDoc, arrayUnion, query, getDocs, orderBy, deleteDoc } from 'firebase/firestore'
 
+import { config } from '../../analysis/HACKRU/config'
+import { GoogleGenerativeAI } from '@google/generative-ai'
+
+const genAI = new GoogleGenerativeAI(config.googleApiKey);
+
+// Function to format message content with markdown-like syntax
+function formatMessageContent(content: string) {
+    return content
+        .split(/(\*\*.*?\*\*|\*.*?\*|`.*?`|```[\s\S]*?```)/)
+        .map((part, index) => {
+            if (part.startsWith('**') && part.endsWith('**')) {
+                return <strong key={index}>{part.slice(2, -2)}</strong>;
+            }
+            if (part.startsWith('*') && part.endsWith('*') && !part.startsWith('**')) {
+                return <em key={index}>{part.slice(1, -1)}</em>;
+            }
+            if (part.startsWith('`') && part.endsWith('`') && !part.startsWith('```')) {
+                return <code key={index} className="bg-muted px-1 py-0.5 rounded text-xs">{part.slice(1, -1)}</code>;
+            }
+            if (part.startsWith('```') && part.endsWith('```')) {
+                const code = part.slice(3, -3).trim();
+                return <pre key={index} className="bg-muted p-2 rounded text-xs overflow-x-auto"><code>{code}</code></pre>;
+            }
+            return part;
+        });
+}
+
 interface Chat {
     id: string
     title: string
@@ -228,11 +255,17 @@ export default function ChatsPage() {
         setInputMessage('')
         setIsTyping(true)
 
+        const prompt = userMessage.content;
+        const model = genAI.getGenerativeModel({ model: config.geminiModel });
+        const result = await model.generateContent(prompt);
+        const response = await result.response;
+        const text = response.text();
+
         // Simulate AI response (replace with actual AI integration)
         setTimeout(() => {
         const aiMessage: Message = {
             id: (Date.now() + 1).toString(),
-            content: `This is a simulated response to: "${inputMessage}". In a real implementation, this would connect to your AI service.`,
+            content: text,
             role: 'assistant',
             timestamp: new Date()
         }
@@ -452,7 +485,9 @@ export default function ChatsPage() {
                             : "bg-muted"
                         )}
                     >
-                        <p className="text-sm whitespace-pre-wrap">{message.content}</p>
+                        <div className="text-sm whitespace-pre-wrap">
+                            {formatMessageContent(message.content)}
+                        </div>
                         <p className="text-xs opacity-70 mt-1">
                             {message.timestamp.toTimeString()}
                         </p>
