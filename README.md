@@ -25,15 +25,15 @@ Open [http://localhost:3000](http://localhost:3000) with your browser to see the
 
 ##Project Description
 
-AI interview platform with AI agents tailored to job responsibility and role with realistic interview practice. Includes personalized feedback according to the interview and analyzes facial features and hand gestures using Computer Vision. 
+AI interview platform with AI agents tailored to job description and roles with realistic interview practices and holistic grading. Includes personalized feedback according to the interview and analyzes facial features and hand gestures using Computer Vision. Agents can be customized for different levels of difficulty and intensities as well as different personalities to test compatibility. 
 
 ##Technologies
 
-Next.js, Firebase, Python, Mediapipe, Numpy, CV2, Tailwindcss, Face Mesh and Hand Landmark Models
+Next.js, Firebase, Python, Mediapipe, Numpy, CV2, Tailwindcss, Face Mesh and Hand Landmark Models, Gemini API
 
 ##Usage
 
-Practice your behavorial interviews for specific companies and job applications and improve with feedback. Our agents will use in conversation context to give detailed advice and help with your growth. 
+Practice your behavorial interviews for specific companies and job applications and improve with feedback. Our agents will use in conversation context to give detailed advice and help with your growth. There is also a chatting system to continue working with the same agent/agents or working with completely different ones. 
 
 ## Deploy on Vercel
 
