@@ -156,10 +156,19 @@ export default function CameraRecorder() {
             // Create a new stream with both video and audio
             const recordingStream = new MediaStream([videoTrack, audioTrack]);
             
-            // Check for MP4 support first, fallback to WebM
-            const mimeType = MediaRecorder.isTypeSupported('video/mp4') 
-                ? 'video/mp4' 
-                : 'video/webm;codecs=vp9,opus';
+            // Try to use MP4 format first, fallback to WebM
+            let mimeType = '';
+            if (MediaRecorder.isTypeSupported('video/mp4;codecs=h264,aac')) {
+                mimeType = 'video/mp4;codecs=h264,aac';
+            } else if (MediaRecorder.isTypeSupported('video/mp4')) {
+                mimeType = 'video/mp4';
+            } else if (MediaRecorder.isTypeSupported('video/webm;codecs=vp9,opus')) {
+                mimeType = 'video/webm;codecs=vp9,opus';
+            } else if (MediaRecorder.isTypeSupported('video/webm;codecs=vp8,opus')) {
+                mimeType = 'video/webm;codecs=vp8,opus';
+            } else {
+                mimeType = 'video/webm';
+            }
 
             const newRecorder = new MediaRecorder(recordingStream, {
                 mimeType: mimeType,
@@ -277,11 +286,19 @@ export default function CameraRecorder() {
         const storage = getStorage();
         const userId = user.uid;
         const timestamp = Date.now();
-        const fileName = `interview-recording-${timestamp}.webm`;
+        
+        // Determine file extension based on blob type
+        const isMP4 = recordedBlob.type.includes('mp4');
+        const fileName = `interview-recording-${timestamp}.${isMP4 ? 'mp4' : 'webm'}`;
 
         try {
+            // If it's already MP4, upload as-is. If WebM, convert to MP4
+            const uploadBlob = isMP4 
+                ? recordedBlob 
+                : new Blob([recordedBlob], { type: 'video/mp4' });
+                
             const videoRef = ref(storage, `users/${userId}/interview_responses/${fileName}`);
-            const snapshot = await uploadBytes(videoRef, recordedBlob);
+            const snapshot = await uploadBytes(videoRef, uploadBlob);
             const videoUrl = await getDownloadURL(snapshot.ref);
 
             console.log("Video uploaded successfully:", videoUrl);
