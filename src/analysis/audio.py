@@ -65,6 +65,7 @@ def analyze_audio_from_mp4(video_path):
     """
     Comprehensive audio analysis function for MP4 files.
     Extracts audio features including MFCCs, pitch, intensity, jitter, and shimmer.
+    Cross-platform compatible (Windows, macOS, Linux).
     
     Args:
         video_path (str): Path to the MP4 video file
@@ -74,6 +75,8 @@ def analyze_audio_from_mp4(video_path):
     """
     import os
     import tempfile
+    import platform
+    import sys
     
     # Create temporary directory for intermediate files
     with tempfile.TemporaryDirectory() as temp_dir:
@@ -85,9 +88,17 @@ def analyze_audio_from_mp4(video_path):
         if audio is None:
             raise ValueError("No audio track found in the video file")
         
-        # Save audio as WAV file
+        # Save audio as WAV file (Windows-compatible path handling)
         audio_path = os.path.join(temp_dir, "extracted_audio.wav")
-        audio.write_audiofile(audio_path, fps=16000, verbose=False, logger=None)
+        
+        # Windows-specific audio settings
+        if platform.system() == "Windows":
+            # Use Windows-compatible audio codec
+            audio.write_audiofile(audio_path, fps=16000, verbose=False, logger=None, 
+                                codec='pcm_s16le', ffmpeg_params=['-ac', '1'])  # Mono for better compatibility
+        else:
+            # Standard settings for macOS/Linux
+            audio.write_audiofile(audio_path, fps=16000, verbose=False, logger=None)
         
         # Load the audio file
         print("Loading audio file...")
@@ -208,7 +219,7 @@ def analyze_audio_from_mp4(video_path):
         return analysis_results
 
 # Example usage:
-# results = analyze_audio_from_mp4("path/to/your/video.mp4")
+# results = analyze_audio_from_mp4("interview.mp4")
 # print(f"Mean pitch: {results['pitch']['mean_f0']:.2f} Hz")
 # print(f"Jitter: {results['voice_quality']['jitter_local']:.4f}")
 # print(f"Shimmer: {results['voice_quality']['shimmer_local']:.4f}")

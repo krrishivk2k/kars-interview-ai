@@ -6,7 +6,9 @@
     "dev": "next dev --turbopack",
     "build": "next build --turbopack",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "setup-windows": "setup-windows.bat",
+    "check-compatibility": "node scripts/check-compatibility.js"
   },
   "dependencies": {
     "@elevenlabs/react": "^0.7.1",
