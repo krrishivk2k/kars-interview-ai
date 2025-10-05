@@ -19,11 +19,15 @@ import {
     Pin,
     PinOff,
     LogOut,
-    UserCircle
+    UserCircle,
+    Edit2,
+    Check,
+    X
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { db } from '@/config/firebase-config'
 import { collection, addDoc, serverTimestamp, doc, updateDoc, arrayUnion, query, getDocs, orderBy, deleteDoc } from 'firebase/firestore'
+import { ModeToggle } from '@/components/ui/theme-toggle'
 
 import { config } from '../../analysis/HACKRU/config'
 import { GoogleGenerativeAI } from '@google/generative-ai'
@@ -180,6 +184,8 @@ export default function ChatsPage() {
     const [currentChat, setCurrentChat] = useState<Chat | null>(null)
     const [inputMessage, setInputMessage] = useState('')
     const [isTyping, setIsTyping] = useState(false)
+    const [editingChatId, setEditingChatId] = useState<string | null>(null)
+    const [editingTitle, setEditingTitle] = useState('')
     const messagesEndRef = useRef<HTMLDivElement>(null)
     const router = useRouter()
 
@@ -211,7 +217,7 @@ export default function ChatsPage() {
         if (!user) return;
         
         // Save to Firestore first and get the document ID
-        const firestoreId = await addChat(user.uid, 'New Chat', [])
+        const firestoreId = await addChat(user.uid, 'Chat ' + Date.now().toString(), [])
         
         if (!firestoreId) {
             console.error('Failed to create chat in Firestore')
@@ -321,6 +327,51 @@ export default function ChatsPage() {
         }
     }
 
+    // Start editing chat title
+    const startEditingChat = (chatId: string, currentTitle: string) => {
+        setEditingChatId(chatId)
+        setEditingTitle(currentTitle)
+        // Temporarily pin sidebar while editing
+        setSidebarPinned(true)
+    }
+
+    // Cancel editing chat title
+    const cancelEditingChat = () => {
+        setEditingChatId(null)
+        setEditingTitle('')
+        // Restore previous sidebar state (unpin if it was temporarily pinned)
+        setSidebarPinned(false)
+    }
+
+    // Save chat title
+    const saveChatTitle = async (chatId: string) => {
+        if (!user || !editingTitle.trim()) return
+
+        try {
+            // Update in Firestore
+            await updateDoc(doc(db, 'chats', user.uid, 'userChats', chatId), {
+                title: editingTitle.trim()
+            })
+
+            // Update local state
+            setChats(prev => prev.map(chat => 
+                chat.id === chatId ? { ...chat, title: editingTitle.trim() } : chat
+            ))
+
+            // Update current chat if it's the one being edited
+            if (currentChat?.id === chatId) {
+                setCurrentChat(prev => prev ? { ...prev, title: editingTitle.trim() } : null)
+            }
+
+            setEditingChatId(null)
+            setEditingTitle('')
+            // Restore previous sidebar state (unpin if it was temporarily pinned)
+            setSidebarPinned(false)
+        } catch (error) {
+            console.error('Error updating chat title:', error)
+        }
+    }
+
     if (loading) {
         return (
         <div className="flex items-center justify-center min-h-screen">
@@ -342,10 +393,15 @@ export default function ChatsPage() {
             (sidebarOpen || sidebarPinned) ? "w-80" : "w-0 overflow-hidden"
             )}
             onMouseEnter={() => !sidebarPinned && setSidebarOpen(true)}
-            onMouseLeave={() => !sidebarPinned && setSidebarOpen(false)}
+            onMouseLeave={(e) => {
+                // Only close if we're actually leaving the sidebar area
+                if (!sidebarPinned && !e.currentTarget.contains(e.relatedTarget as Node)) {
+                    setSidebarOpen(false)
+                }
+            }}
         >
             <div className="flex flex-col h-full p-4">
-            {/* Header with Home and Pin buttons */}
+            {/* Header with Home, Pin, and Theme toggle buttons */}
             <div className="flex items-center justify-between mb-4">
                 <Button 
                 onClick={() => router.push('/')}
@@ -356,24 +412,27 @@ export default function ChatsPage() {
                 <Home className="w-4 h-4" />
                 Home
                 </Button>
-                <Button 
-                onClick={() => setSidebarPinned(!sidebarPinned)}
-                variant="ghost"
-                size="sm"
-                className="gap-2"
-                >
-                {sidebarPinned ? (
-                    <>
-                    <PinOff className="w-4 h-4" />
-                    Unpin
-                    </>
-                ) : (
-                    <>
-                    <Pin className="w-4 h-4" />
-                    Pin
-                    </>
-                )}
-                </Button>
+                <div className="flex items-center gap-2">
+                    <ModeToggle />
+                    <Button 
+                    onClick={() => setSidebarPinned(!sidebarPinned)}
+                    variant="ghost"
+                    size="sm"
+                    className="gap-2"
+                    >
+                    {sidebarPinned ? (
+                        <>
+                        <PinOff className="w-4 h-4" />
+                        Unpin
+                        </>
+                    ) : (
+                        <>
+                        <Pin className="w-4 h-4" />
+                        Pin
+                        </>
+                    )}
+                    </Button>
+                </div>
             </div>
 
             {/* New Chat Button */}
@@ -396,22 +455,78 @@ export default function ChatsPage() {
                         "group flex items-center gap-2 p-2 rounded-lg cursor-pointer hover:bg-accent transition-colors",
                         currentChat?.id === chat.id && "bg-accent"
                     )}
-                    onClick={() => setCurrentChat(chat)}
+                    onClick={() => !editingChatId && setCurrentChat(chat)}
                     >
                     <MessageSquare className="w-4 h-4 text-muted-foreground" />
-                    <span className="flex-1 text-sm truncate">{chat.title}</span>
-                    <div className="opacity-0 group-hover:opacity-100 transition-opacity">
-                        <Button
-                        size="sm"
-                        variant="ghost"
-                        onClick={(e) => {
-                            e.stopPropagation()
-                            deleteChat(chat.id)
-                        }}
-                        >
-                        <Trash2 className="w-3 h-3" />
-                        </Button>
-                    </div>
+                    
+                    {editingChatId === chat.id ? (
+                        <div className="flex-1 flex items-center gap-1">
+                            <Input
+                                value={editingTitle}
+                                onChange={(e) => setEditingTitle(e.target.value)}
+                                onKeyDown={(e) => {
+                                    if (e.key === 'Enter') {
+                                        saveChatTitle(chat.id)
+                                    } else if (e.key === 'Escape') {
+                                        cancelEditingChat()
+                                    }
+                                }}
+                                className="text-sm h-6"
+                                autoFocus
+                                onClick={(e) => e.stopPropagation()}
+                            />
+                            <Button
+                                size="sm"
+                                variant="ghost"
+                                onClick={(e) => {
+                                    e.stopPropagation()
+                                    saveChatTitle(chat.id)
+                                }}
+                                className="h-6 w-6 p-0"
+                            >
+                                <Check className="w-3 h-3" />
+                            </Button>
+                            <Button
+                                size="sm"
+                                variant="ghost"
+                                onClick={(e) => {
+                                    e.stopPropagation()
+                                    cancelEditingChat()
+                                }}
+                                className="h-6 w-6 p-0"
+                            >
+                                <X className="w-3 h-3" />
+                            </Button>
+                        </div>
+                    ) : (
+                        <>
+                            <span className="flex-1 text-sm truncate">{chat.title}</span>
+                            <div className="opacity-0 group-hover:opacity-100 transition-opacity flex items-center gap-1">
+                                <Button
+                                    size="sm"
+                                    variant="ghost"
+                                    onClick={(e) => {
+                                        e.stopPropagation()
+                                        startEditingChat(chat.id, chat.title)
+                                    }}
+                                    className="h-6 w-6 p-0"
+                                >
+                                    <Edit2 className="w-3 h-3" />
+                                </Button>
+                                <Button
+                                    size="sm"
+                                    variant="ghost"
+                                    onClick={(e) => {
+                                        e.stopPropagation()
+                                        deleteChat(chat.id)
+                                    }}
+                                    className="h-6 w-6 p-0"
+                                >
+                                    <Trash2 className="w-3 h-3" />
+                                </Button>
+                            </div>
+                        </>
+                    )}
                     </div>
                 ))}
                 </div>
