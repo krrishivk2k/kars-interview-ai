@@ -4,11 +4,12 @@
   "private": true,
   "scripts": {
     "dev": "next dev --turbopack",
-    "build": "next build --turbopack",
+    "build": "next build --turbopack", 
     "start": "next start",
     "lint": "eslint",
     "setup-windows": "setup-windows.bat",
-    "check-compatibility": "node scripts/check-compatibility.js"
+    "check-compatibility": "node scripts/check-compatibility.js",
+    "check-compat": "node scripts/check-compatibility.js"
   },
   "dependencies": {
     "@elevenlabs/react": "^0.7.1",
