@@ -1,0 +1,28 @@
+{
+    "name": "google-genai-test",
+    "version": "1.0.0",
+    "description": "Node.js project for testing Google Generative AI",
+    "main": "index.js",
+    "type": "module",
+    "scripts": {
+      "start": "node index.js",
+      "test": "node test.js",
+      "dev": "node --watch index.js"
+    },
+    "keywords": [
+      "google",
+      "generative-ai",
+      "ai",
+      "nodejs"
+    ],
+    "author": "",
+    "license": "MIT",
+    "dependencies": {
+      "@elevenlabs/elevenlabs-js": "^2.17.0",
+      "@google/generative-ai": "^0.21.0",
+      "dotenv": "^16.4.5"
+    },
+    "devDependencies": {
+      "nodemon": "^3.1.0"
+    }
+  }
