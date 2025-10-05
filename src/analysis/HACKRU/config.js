@@ -2,10 +2,11 @@
 // Copy this file to .env and add your actual API key
 
 export const config = {
-    // Get your API key from: https://makersuite.google.com/app/apikey
-    googleApiKey: process.env.NEXT_PUBLIC_GOOGLE_API_KEY || '',
-    
-    // Specify which model to use
-    // Available models: gemini-pro, gemini-pro-vision, gemini-1.5-pro, etc.
-    geminiModel: process.env.GEMINI_MODEL || 'gemini-2.5-flash'
+  // Get your API key from: https://makersuite.google.com/app/apikey
+  googleApiKey: process.env.GOOGLE_API_KEY || '',
+  
+  // Optional: Specify which model to use
+  // Available models: gemini-pro, gemini-pro-vision, etc.
+  geminiModel: process.env.GEMINI_MODEL || ''
+
 };

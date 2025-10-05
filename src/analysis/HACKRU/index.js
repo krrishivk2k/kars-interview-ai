@@ -4,7 +4,7 @@ async function testGemini() {
   try {
     console.log('🤖 Testing Google Generative AI...\n');
     
-    // Initialize the model
+w    // Initialize the model
     const model = await initializeGemini();
     
     // Test prompt
