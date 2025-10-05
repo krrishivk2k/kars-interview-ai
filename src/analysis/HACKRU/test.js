@@ -1,17 +1,9 @@
-import { GoogleGenerativeAI } from '@google/generative-ai';
-import { config } from './config.js';
-import dotenv from 'dotenv';
-
-// Load environment variables
-dotenv.config();
-
-// Initialize the Google Generative AI client
-const genAI = new GoogleGenerativeAI(config.googleApiKey);
+import { initializeGemini, generateContent, displayResponse } from './shared.js';
 
 async function runTests() {
   console.log('🧪 Running Google Gen AI Tests...\n');
   
-  const model = genAI.getGenerativeModel({ model: config.geminiModel });
+  const model = await initializeGemini();
   
   const testCases = [
     {
@@ -39,13 +31,8 @@ async function runTests() {
     console.log(`Prompt: ${testCase.prompt}\n`);
     
     try {
-      console.log('⏳ Generating response...');
-      const result = await model.generateContent(testCase.prompt);
-      const response = await result.response;
-      const text = response.text();
-      
-      console.log('✅ Response:');
-      console.log(text);
+      const text = await generateContent(model, testCase.prompt);
+      displayResponse(text, `✅ Test ${i + 1} Response`);
       
     } catch (error) {
       console.error(`❌ Test ${i + 1} failed:`, error.message);
