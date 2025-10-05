@@ -242,4 +242,4 @@ if __name__ == "__main__":
     elif mode == "mood":
         mood(video_path)
     else:
-        print("Invalid mode. Use 'hand' or 'mood'")
+        exit(1)
