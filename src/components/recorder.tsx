@@ -156,19 +156,45 @@ export default function CameraRecorder() {
             // Create a new stream with both video and audio
             const recordingStream = new MediaStream([videoTrack, audioTrack]);
             
-            // Try to use MP4 format first, fallback to WebM
+            // Cross-platform MIME type detection (Windows, macOS, Linux)
             let mimeType = '';
-            if (MediaRecorder.isTypeSupported('video/mp4;codecs=h264,aac')) {
-                mimeType = 'video/mp4;codecs=h264,aac';
-            } else if (MediaRecorder.isTypeSupported('video/mp4')) {
-                mimeType = 'video/mp4';
-            } else if (MediaRecorder.isTypeSupported('video/webm;codecs=vp9,opus')) {
-                mimeType = 'video/webm;codecs=vp9,opus';
-            } else if (MediaRecorder.isTypeSupported('video/webm;codecs=vp8,opus')) {
-                mimeType = 'video/webm;codecs=vp8,opus';
+            const userAgent = navigator.userAgent.toLowerCase();
+            const isWindows = userAgent.includes('windows');
+            const isChrome = userAgent.includes('chrome');
+            const isEdge = userAgent.includes('edge');
+            const isFirefox = userAgent.includes('firefox');
+            
+            // Windows-specific codec preferences
+            if (isWindows) {
+                if (MediaRecorder.isTypeSupported('video/mp4;codecs=h264,aac')) {
+                    mimeType = 'video/mp4;codecs=h264,aac';
+                } else if (MediaRecorder.isTypeSupported('video/mp4')) {
+                    mimeType = 'video/mp4';
+                } else if (MediaRecorder.isTypeSupported('video/webm;codecs=vp8,opus')) {
+                    mimeType = 'video/webm;codecs=vp8,opus';
+                } else if (MediaRecorder.isTypeSupported('video/webm;codecs=vp9,opus')) {
+                    mimeType = 'video/webm;codecs=vp9,opus';
+                } else {
+                    mimeType = 'video/webm';
+                }
             } else {
-                mimeType = 'video/webm';
+                // macOS/Linux preferences
+                if (MediaRecorder.isTypeSupported('video/mp4;codecs=h264,aac')) {
+                    mimeType = 'video/mp4;codecs=h264,aac';
+                } else if (MediaRecorder.isTypeSupported('video/mp4')) {
+                    mimeType = 'video/mp4';
+                } else if (MediaRecorder.isTypeSupported('video/webm;codecs=vp9,opus')) {
+                    mimeType = 'video/webm;codecs=vp9,opus';
+                } else if (MediaRecorder.isTypeSupported('video/webm;codecs=vp8,opus')) {
+                    mimeType = 'video/webm;codecs=vp8,opus';
+                } else {
+                    mimeType = 'video/webm';
+                }
             }
+            
+            console.log(`Platform: ${isWindows ? 'Windows' : 'macOS/Linux'}`);
+            console.log(`Browser: ${isChrome ? 'Chrome' : isEdge ? 'Edge' : isFirefox ? 'Firefox' : 'Other'}`);
+            console.log(`Selected MIME type: ${mimeType}`);
 
             const newRecorder = new MediaRecorder(recordingStream, {
                 mimeType: mimeType,
