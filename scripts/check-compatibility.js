@@ -1,5 +1,3 @@
-#!/usr/bin/env node
-
 /**
  * Cross-platform compatibility checker for KARS Interview AI
  * Checks browser support, codec availability, and platform-specific features
