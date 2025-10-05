@@ -13,7 +13,11 @@ import { auth, db } from '../config/firebase-config';
 
 
 
-export default function CameraRecorder() {
+interface CameraRecorderProps {
+  onAnalysisComplete?: (result: any, transcript: { message: string; source: string }[]) => void;
+}
+
+export default function CameraRecorder({ onAnalysisComplete }: CameraRecorderProps) {
    const videoRef = useRef<HTMLVideoElement>(null);
    // const audioRef = useRef<HTMLAudioElement>(null);
    const [recorder, setRecorder] = useState<MediaRecorder | null>(null);
@@ -386,10 +390,15 @@ export default function CameraRecorder() {
          return;
        }
     
-       const result = await res.json();
-       alert('Analysis complete! See console.');
-       console.log('✅ Final Analysis Result:', result);
-
+      const result = await res.json();
+      alert('Analysis complete! See console.');
+      console.log('✅ Final Analysis Result:', result);
+      
+      // Pass result and transcript back to parent component
+      if (onAnalysisComplete) {
+        onAnalysisComplete(result, transcript);
+      }
+       
 
      };
 

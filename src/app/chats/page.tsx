@@ -189,6 +189,8 @@ export default function ChatsPage() {
     const [editingChatId, setEditingChatId] = useState<string | null>(null)
     const [editingTitle, setEditingTitle] = useState('')
     const [showInterviewModal, setShowInterviewModal] = useState(false)
+    const [interviewResult, setInterviewResult] = useState<any>(null)
+    const [interviewTranscript, setInterviewTranscript] = useState<{ message: string; source: string }[]>([])
     const messagesEndRef = useRef<HTMLDivElement>(null)
     const router = useRouter()
 
@@ -380,6 +382,52 @@ export default function ChatsPage() {
         } catch (error) {
             console.error('Error updating chat title:', error)
         }
+    }
+
+    // Handle interview analysis result
+    const handleAnalysisComplete = (result: any, transcript: { message: string; source: string }[]) => {
+        setInterviewResult(result)
+        setInterviewTranscript(transcript)
+        console.log('Interview analysis result received:', result)
+        console.log('Interview transcript received:', transcript)
+        
+        // Add both result and transcript as messages to the current chat
+        if (currentChat && user) {
+            // Create transcript message
+            const transcriptMessage: Message = {
+                id: (Date.now() + 1).toString(),
+                content: `**Interview Transcript:**\n\n${transcript.map(t => `**${t.source}:** ${t.message}`).join('\n\n')}`,
+                role: 'assistant',
+                timestamp: new Date()
+            }
+            
+            // Create analysis result message
+            const analysisMessage: Message = {
+                id: Date.now().toString(),
+                content: `**Interview Analysis Complete!**\n\n**Results:**\n${JSON.stringify(result, null, 2)}`,
+                role: 'assistant',
+                timestamp: new Date()
+            }
+            
+            // Update current chat with both messages
+            const updatedChat = {
+                ...currentChat,
+                messages: [...currentChat.messages, transcriptMessage, analysisMessage]
+            }
+            
+            // Save both messages to Firestore
+            addMessageToChat(user.uid, currentChat.id, transcriptMessage.content, transcriptMessage.role)
+            addMessageToChat(user.uid, currentChat.id, analysisMessage.content, analysisMessage.role)
+            
+            // Update local state
+            setCurrentChat(updatedChat)
+            setChats(prev => prev.map(chat => 
+                chat.id === currentChat.id ? updatedChat : chat
+            ))
+        }
+        
+        // Close the modal
+        setShowInterviewModal(false)
     }
 
     if (loading) {
@@ -733,7 +781,7 @@ export default function ChatsPage() {
                         </Button>
                     </div>
                     <div className="p-4 overflow-y-auto max-h-[calc(90vh-80px)]">
-                        <Recorder />
+                        <Recorder onAnalysisComplete={handleAnalysisComplete} />
                     </div>
                 </div>
             </div>
