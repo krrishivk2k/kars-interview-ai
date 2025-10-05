@@ -331,6 +331,7 @@ export default function CameraRecorder() {
             console.log("Video uploaded successfully:", videoUrl);
             setUploadSuccess(true);
             alert("Video uploaded successfully!");
+            analyzeVideo(videoUrl)
             
         } catch (error) {
             console.error('Error uploading video:', error);
@@ -340,18 +341,25 @@ export default function CameraRecorder() {
         }
     }, [recordedBlob]);
 
-    const getAnalyze = (async (videoRef: any) => {
-        const user = auth.currentUser;
-        if (!user) {
-            return;
+    const analyzeVideo = async (videoUrl: any) => {
+      
+        const res = await fetch('/api/functions', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ videoUrl, mode: 'mood' }),
+          });
+      
+        if (!res.ok) {
+          const error = await res.json();
+          console.error('Error analyzing video:', error);
+          return;
         }
-        
-        const url = await getDownloadURL(videoRef);
-        const res = await fetch(url);
-        const blob = await res.blob();
-        const file = new File([blob], "video.mp4", { type: "video/mp4" });
-        
-    })
+      
+        const result = await res.json();
+        alert('Analysis complete! See console.');
+        console.log('✅ Final Analysis Result:', result);
+
+      };
 
     // Show loading spinner while checking authentication
     if (loading) {
