@@ -22,12 +22,14 @@ import {
     UserCircle,
     Edit2,
     Check,
-    X
+    X,
+    Video
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { db } from '@/config/firebase-config'
 import { collection, addDoc, serverTimestamp, doc, updateDoc, arrayUnion, query, getDocs, orderBy, deleteDoc } from 'firebase/firestore'
 import { ModeToggle } from '@/components/ui/theme-toggle'
+import Recorder from '@/components/recorder'
 
 import { config } from '../../analysis/HACKRU/config'
 import { GoogleGenerativeAI } from '@google/generative-ai'
@@ -186,6 +188,7 @@ export default function ChatsPage() {
     const [isTyping, setIsTyping] = useState(false)
     const [editingChatId, setEditingChatId] = useState<string | null>(null)
     const [editingTitle, setEditingTitle] = useState('')
+    const [showInterviewModal, setShowInterviewModal] = useState(false)
     const messagesEndRef = useRef<HTMLDivElement>(null)
     const router = useRouter()
 
@@ -566,18 +569,31 @@ export default function ChatsPage() {
         <div className="flex-1 flex flex-col">
             {/* Header */}
             <div className="border-b border-border p-4">
-            <div className="flex items-center gap-2">
-                <Button
-                variant="ghost"
-                size="sm"
-                className="lg:hidden"
-                onClick={() => setSidebarOpen(!sidebarOpen)}
-                >
-                <ChevronLeft className="w-4 h-4" />
-                </Button>
-                <h1 className="text-lg font-semibold">
-                {currentChat?.title || 'Select a chat to start'}
-                </h1>
+            <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                    <Button
+                    variant="ghost"
+                    size="sm"
+                    className="lg:hidden"
+                    onClick={() => setSidebarOpen(!sidebarOpen)}
+                    >
+                    <ChevronLeft className="w-4 h-4" />
+                    </Button>
+                    <h1 className="text-lg font-semibold">
+                    {currentChat?.title || 'Select a chat to start'}
+                    </h1>
+                </div>
+                {currentChat && (
+                    <Button
+                    onClick={() => setShowInterviewModal(true)}
+                    variant="outline"
+                    size="sm"
+                    className="gap-2"
+                    >
+                    <Video className="w-4 h-4" />
+                    Enter Interview
+                    </Button>
+                )}
             </div>
             </div>
 
@@ -689,6 +705,38 @@ export default function ChatsPage() {
             className="fixed left-0 top-0 w-4 h-full z-20"
             onMouseEnter={() => setSidebarOpen(true)}
             />
+        )}
+
+        {/* Interview Modal */}
+        {showInterviewModal && (
+            <div 
+                className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4"
+                onClick={(e) => {
+                    // Close modal when clicking on the backdrop
+                    if (e.target === e.currentTarget) {
+                        setShowInterviewModal(false)
+                    }
+                }}
+            >
+                <div 
+                    className="bg-background rounded-lg shadow-lg max-w-4xl w-full max-h-[90vh] overflow-hidden"
+                    onClick={(e) => e.stopPropagation()}
+                >
+                    <div className="flex items-center justify-between p-4 border-b border-border">
+                        <h2 className="text-lg font-semibold">Interview Recording</h2>
+                        <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => setShowInterviewModal(false)}
+                        >
+                            <X className="w-4 h-4" />
+                        </Button>
+                    </div>
+                    <div className="p-4 overflow-y-auto max-h-[calc(90vh-80px)]">
+                        <Recorder />
+                    </div>
+                </div>
+            </div>
         )}
         </div>
     )
