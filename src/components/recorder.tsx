@@ -3,6 +3,11 @@
 import { useConversation } from '@elevenlabs/react';
 import { useEffect, useRef, useState, useCallback } from "react";
 import { Button } from "@/components/ui/button";
+import { getDownloadURL, getStorage, ref, uploadBytes } from 'firebase/storage';
+import { onAuthStateChanged, User } from 'firebase/auth';
+import { getFirestore, doc, getDoc } from 'firebase/firestore';
+import { useRouter } from 'next/navigation';
+import { auth, db } from '../config/firebase-config';
 
 export default function CameraRecorder() {
     const videoRef = useRef<HTMLVideoElement>(null);
@@ -16,6 +21,11 @@ export default function CameraRecorder() {
     const [recordedBlob, setRecordedBlob] = useState<Blob | null>(null);
     const [downloadUrl, setDownloadUrl] = useState<string | null>(null);
     const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+    const [uploading, setUploading] = useState<boolean>(false);
+    const [uploadSuccess, setUploadSuccess] = useState<boolean>(false);
+    const [user, setUser] = useState<User | null>(null);
+    const [loading, setLoading] = useState<boolean>(true);
+    const router = useRouter();
 
     // agent states and variables
     const [selectedCompany, setSelectedCompany] = useState('Google');
@@ -88,6 +98,21 @@ export default function CameraRecorder() {
         };
     }, []);
 
+    // Check authentication status
+    useEffect(() => {
+        const unsubscribe = onAuthStateChanged(auth, (user) => {
+            setUser(user);
+            setLoading(false);
+            
+            if (!user) {
+                // Redirect to login page if not authenticated
+                router.push('/login');
+            }
+        });
+
+        return () => unsubscribe();
+    }, [router]);
+
     useEffect(() => {
         // The cleanup function runs before the next effect or when unmounting.
         return () => {
@@ -106,6 +131,8 @@ export default function CameraRecorder() {
             chunksRef.current = [];
             setRecordedVideoUrl(null);
             setRecordedBlob(null);
+            setPreviewUrl(null); // Clear preview URL
+            setUploadSuccess(false);
             
             // Request microphone audio
             const audioStream = await navigator.mediaDevices.getUserMedia({
@@ -159,6 +186,7 @@ export default function CameraRecorder() {
                 console.log("Recording format:", mimeType);
                 setRecordedBlob(blob);
                 setRecordedVideoUrl(url);
+                setPreviewUrl(url); // Set preview URL for the video preview
                 setChunks([]);
                 chunksRef.current = []; // Clear the ref
                 
@@ -231,10 +259,68 @@ export default function CameraRecorder() {
             alert('Error converting to MP4. The file will be downloaded as WebM format.');
         }
     }, [recordedBlob]);
+    
+    const uploadToFirebase = useCallback(async () => {
+        if (!recordedBlob) return;
+        
+        setUploading(true);
+        setUploadSuccess(false);
+        
+        const user = auth.currentUser;
 
+        if (!user) {
+            alert("Please log in to upload videos");
+            setUploading(false);
+            return;
+        }
+
+        const storage = getStorage();
+        const userId = user.uid;
+        const timestamp = Date.now();
+        const fileName = `interview-recording-${timestamp}.webm`;
+
+        try {
+            const videoRef = ref(storage, `users/${userId}/interview_responses/${fileName}`);
+            const snapshot = await uploadBytes(videoRef, recordedBlob);
+            const videoUrl = await getDownloadURL(snapshot.ref);
+
+            console.log("Video uploaded successfully:", videoUrl);
+            setUploadSuccess(true);
+            alert("Video uploaded successfully!");
+            
+        } catch (error) {
+            console.error('Error uploading video:', error);
+            alert('Error uploading video. Please try again.');
+        } finally {
+            setUploading(false);
+        }
+    }, [recordedBlob]);
+
+
+    // Show loading spinner while checking authentication
+    if (loading) {
+        return (
+            <div className="flex flex-col items-center justify-center min-h-[400px] gap-4">
+                <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary"></div>
+                <p className="text-muted-foreground">Checking authentication...</p>
+            </div>
+        );
+    }
+
+    // Show message if not authenticated (this shouldn't normally show due to redirect)
+    if (!user) {
+        return (
+            <div className="flex flex-col items-center justify-center min-h-[400px] gap-4">
+                <h2 className="text-xl font-semibold text-destructive">Access Denied</h2>
+                <p className="text-muted-foreground">You must be logged in to access this page.</p>
+                <Button onClick={() => router.push('/login')}>
+                    Go to Login
+                </Button>
+            </div>
+        );
+    }
 
     return (
-        
         <div className="flex flex-col items-center gap-4">
         <video ref={videoRef} autoPlay playsInline className="w-96 rounded-xl shadow" />
         {/* Hidden audio element for monitoring */}
@@ -262,33 +348,78 @@ export default function CameraRecorder() {
             </div>
         )}
         
-        {/* Video preview and download - only show when recording is stopped and we have a recorded blob */}
+        {/* Video preview and actions - only show when recording is stopped and we have a recorded blob */}
         {!recording && recordedBlob && previewUrl && (
-            <div className="flex flex-col items-center gap-4 mt-4">
-                <p className="text-sm text-gray-600">Recording completed! Preview your video:</p>
+            <div className="flex flex-col items-center gap-6 mt-6 p-6 bg-card border-2 border-dashed border-border rounded-lg ">
+                <div className="text-center">
+                    <h3 className="text-lg font-semibold text-card-foreground mb-2">🎉 Recording Complete!</h3>
+                    <p className="text-sm text-muted-foreground">Preview your interview recording below</p>
+                </div>
                 
                 {/* Video preview */}
-                <video 
-                    src={previewUrl} 
-                    controls 
-                    className="w-96 rounded-xl shadow"
-                    style={{ maxHeight: '300px' }}
-                    onLoadStart={() => console.log("Video load started")}
-                    onLoadedData={() => console.log("Video data loaded")}
-                    onError={(e) => console.error("Video error:", e)}
-                    onCanPlay={() => console.log("Video can play")}
-                >
-                    Your browser does not support the video tag.
-                </video>
+                <div className="relative">
+                    <video 
+                        src={previewUrl} 
+                        controls 
+                        className="w-full max-w-md rounded-lg shadow-lg border border-border"
+                        style={{ maxHeight: '400px' }}
+                        onLoadStart={() => console.log("Video load started")}
+                        onLoadedData={() => console.log("Video data loaded")}
+                        onError={(e) => console.error("Video error:", e)}
+                        onCanPlay={() => console.log("Video can play")}
+                    >
+                        Your browser does not support the video tag.
+                    </video>
+                </div>
                 
-                {/* Download button */}
-                <Button 
-                    onClick={convertToMp4} 
-                    className="px-4 py-2 bg-purple-600 text-white rounded"
-                    size="default"
-                >
-                    🎬 Download MP4
-                </Button>
+                {/* Action buttons */}
+                <div className="flex flex-col sm:flex-row gap-3 w-full max-w-md">
+                    <Button 
+                        onClick={convertToMp4} 
+                        className="flex-1"
+                        size="default"
+                    >
+                        📥 Download Video
+                    </Button>
+
+                    <Button 
+                        onClick={uploadToFirebase} 
+                        disabled={uploading}
+                        variant="secondary"
+                        className="flex-1"
+                        size="default"
+                    >
+                        {uploading ? (
+                            <>
+                                <svg className="animate-spin -ml-1 mr-2 h-4 w-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                                </svg>
+                                Uploading...
+                            </>
+                        ) : (
+                            <>
+                                ☁️ Upload to Cloud
+                            </>
+                        )}
+                    </Button>
+                </div>
+
+                {/* Upload success message */}
+                {uploadSuccess && (
+                    <div className="flex items-center gap-2 px-4 py-2 bg-secondary text-secondary-foreground rounded-md border border-border">
+                        <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
+                            <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+                        </svg>
+                        Video uploaded successfully!
+                    </div>
+                )}
+
+                {/* Recording info */}
+                <div className="text-xs text-muted-foreground text-center">
+                    <p>File size: {recordedBlob ? `${(recordedBlob.size / (1024 * 1024)).toFixed(2)} MB` : 'N/A'}</p>
+                    <p>Format: {recordedBlob?.type || 'N/A'}</p>
+                </div>
             </div>
         )}
         </div>
