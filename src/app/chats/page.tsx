@@ -22,6 +22,8 @@ import {
     UserCircle
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
+import { db } from '@/config/firebase-config'
+import { collection, addDoc, serverTimestamp, doc, updateDoc, arrayUnion, query, getDocs, orderBy, deleteDoc } from 'firebase/firestore'
 
 interface Chat {
     id: string
@@ -37,6 +39,111 @@ interface Message {
     timestamp: Date
 }
 
+
+interface ChatDataForFirestore {
+    title: string;
+    messages: { content: string; role: 'user' | 'assistant'; timestamp: ReturnType<typeof serverTimestamp> }[];
+    createdAt: ReturnType<typeof serverTimestamp>;
+}
+
+
+interface MessageForFirestore {
+    id: string; // Or generate client-side, or simply let Firestore manage document updates
+    content: string;
+    role: 'user' | 'assistant';
+    timestamp: ReturnType<typeof Date>; // Use serverTimestamp for consistency
+}
+
+
+async function addChat(userId: string, title: string, initialMessages: { content: string; role: 'user' | 'assistant' }[]): Promise<string | null> {
+    try {
+        // Prepare messages with server timestamps
+        const messagesWithTimestamps = initialMessages.map(msg => ({
+            ...msg,
+            timestamp: serverTimestamp()
+        }));
+        
+        const newChatData: ChatDataForFirestore = {
+            title: title,
+            messages: messagesWithTimestamps,
+            createdAt: serverTimestamp(), // Use serverTimestamp for consistent creation times
+        };
+        
+        // Add chat to user's subcollection: chats/{userId}/userChats/{chatId}
+        const docRef = await addDoc(collection(db, 'chats', userId, 'userChats'), newChatData);
+        console.log("New chat added with ID:", docRef.id);
+        return docRef.id; // Return the ID of the newly created chat document
+    } catch (error) {
+        console.error("Error adding chat:", error);
+        return null;
+    }
+}
+
+/**
+ * Adds a new message to an existing chat document.
+ * @param chatId The ID of the chat document to update.
+ * @param content The text content of the message.
+ * @param role The role of the sender ('user' or 'assistant').
+ */
+async function addMessageToChat(userId: string, chatId: string, content: string, role: 'user' | 'assistant'): Promise<void> {
+    try {
+        // Reference to the chat document in user's subcollection
+        const chatRef = doc(db, 'chats', userId, 'userChats', chatId);
+
+        const newMessage : MessageForFirestore = {
+            id: Date.now().toString(),
+            content: content,
+            role: role,
+            timestamp: Date.now().toString(), // Ensures consistent server-side timestamp
+        };
+
+        // Use arrayUnion to atomically add the new message to the 'messages' array
+        await updateDoc(chatRef, {
+            messages: arrayUnion(newMessage)
+        });
+
+        console.log(`Message added to chat: ${chatId}`);
+    } catch (error) {
+        console.error("Error adding message to chat:", error);
+        throw error;
+    }
+}
+
+
+// Function to load user's chats from Firestore
+async function loadUserChats(userId: string): Promise<Chat[]> {
+    try {
+        const chatsRef = collection(db, 'chats', userId, 'userChats');
+        const q = query(chatsRef, orderBy('createdAt', 'desc'));
+        const querySnapshot = await getDocs(q);
+        
+        const chats: Chat[] = [];
+        querySnapshot.forEach((doc) => {
+            const data = doc.data();
+            
+            // Convert message timestamps to Date objects
+            const messages = (data.messages || []).map((msg: any) => ({
+                ...msg,
+                timestamp: msg.timestamp?.toDate ? msg.timestamp.toDate() : new Date(msg.timestamp || Date.now())
+            }));
+            
+            chats.push({
+                id: doc.id,
+                title: data.title,
+                messages: messages,
+                createdAt: data.createdAt?.toDate() || new Date()
+            });
+        });
+        
+        console.log(`Loaded ${chats.length} chats for user ${userId}`);
+        return chats;
+    } catch (error) {
+        console.error("Error loading chats:", error);
+        return [];
+    }
+}
+
+
 export default function ChatsPage() {
     const [user, setUser] = useState<FirebaseUser | null>(null)
     const [loading, setLoading] = useState(true)
@@ -51,13 +158,17 @@ export default function ChatsPage() {
 
     // Check authentication
     useEffect(() => {
-        const unsubscribe = onAuthStateChanged(auth, (user) => {
-        setUser(user)
-        setLoading(false)
-        
-        if (!user) {
-            router.push('/login')
-        }
+        const unsubscribe = onAuthStateChanged(auth, async (user) => {
+            setUser(user)
+            setLoading(false)
+            
+            if (!user) {
+                router.push('/login')
+            } else {
+                // Load user's chats when authenticated
+                const userChats = await loadUserChats(user.uid)
+                setChats(userChats)
+            }
         })
 
         return () => unsubscribe()
@@ -69,15 +180,26 @@ export default function ChatsPage() {
     }, [currentChat?.messages])
 
     // Create new chat
-    const createNewChat = () => {
-        const newChat: Chat = {
-        id: Date.now().toString(),
-        title: 'New Chat',
-        messages: [],
-        createdAt: new Date()
+    const createNewChat = async () => {
+        if (!user) return;
+        
+        // Save to Firestore first and get the document ID
+        const firestoreId = await addChat(user.uid, 'New Chat', [])
+        
+        if (!firestoreId) {
+            console.error('Failed to create chat in Firestore')
+            return
         }
-        setChats(prev => [newChat, ...prev])
-        setCurrentChat(newChat)
+
+        // Reload chats from Firestore to get the latest data
+        const userChats = await loadUserChats(user.uid)
+        setChats(userChats)
+        
+        // Set the newly created chat as current
+        const newChat = userChats.find(chat => chat.id === firestoreId)
+        if (newChat) {
+            setCurrentChat(newChat)
+        }
     }
 
     // Send message
@@ -89,13 +211,14 @@ export default function ChatsPage() {
         content: inputMessage,
         role: 'user',
         timestamp: new Date()
-        }
-
+    }
+    
         // Update current chat with user message
         const updatedChat = {
-        ...currentChat,
-        messages: [...currentChat.messages, userMessage]
+            ...currentChat,
+            messages: [...currentChat.messages, userMessage]
         }
+        addMessageToChat(user!.uid, currentChat.id, userMessage.content, userMessage.role)
         
         setCurrentChat(updatedChat)
         setChats(prev => prev.map(chat => 
@@ -119,6 +242,8 @@ export default function ChatsPage() {
             messages: [...updatedChat.messages, aiMessage]
         }
 
+        addMessageToChat(user!.uid, currentChat.id, aiMessage.content, aiMessage.role)
+
         setCurrentChat(finalChat)
         setChats(prev => prev.map(chat => 
             chat.id === currentChat.id ? finalChat : chat
@@ -136,10 +261,20 @@ export default function ChatsPage() {
     }
 
     // Delete chat
-    const deleteChat = (chatId: string) => {
-        setChats(prev => prev.filter(chat => chat.id !== chatId))
-        if (currentChat?.id === chatId) {
-        setCurrentChat(null)
+    const deleteChat = async (chatId: string) => {
+        if (!user) return;
+        
+        try {
+            // Delete from Firestore
+            await deleteDoc(doc(db, 'chats', user.uid, 'userChats', chatId));
+            
+            // Update local state
+            setChats(prev => prev.filter(chat => chat.id !== chatId));
+            if (currentChat?.id === chatId) {
+                setCurrentChat(null);
+            }
+        } catch (error) {
+            console.error('Error deleting chat:', error);
         }
     }
 
@@ -319,7 +454,7 @@ export default function ChatsPage() {
                     >
                         <p className="text-sm whitespace-pre-wrap">{message.content}</p>
                         <p className="text-xs opacity-70 mt-1">
-                        {message.timestamp.toLocaleTimeString()}
+                            {message.timestamp.toTimeString()}
                         </p>
                     </div>
 
