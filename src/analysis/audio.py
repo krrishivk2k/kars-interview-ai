@@ -10,7 +10,7 @@ from parselmouth.praat import call
 import matplotlib.pyplot as plt
 
 # Extract audio from video (Update after recording can be extracted)
-video = VideoFileClip("/content/drive/MyDrive/interview.mp4")
+video = VideoFileClip("interview.mp4")
 audio = video.audio
 audio.write_audiofile("interview.wav", fps=16000)
 
