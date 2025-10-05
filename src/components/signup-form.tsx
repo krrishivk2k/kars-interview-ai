@@ -17,7 +17,7 @@ import {
 import { Input } from "@/components/ui/input"
 
 import { auth } from "../config/firebase-config"
-import { createUserWithEmailAndPassword } from "firebase/auth"
+import { createUserWithEmailAndPassword, GoogleAuthProvider, signInWithPopup } from "firebase/auth"
 import { useState } from "react"
 import { useRouter } from "next/navigation"
 
@@ -26,6 +26,21 @@ export function SignupForm({ ...props }: React.ComponentProps<typeof Card>) {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const router = useRouter();
+
+  const handleGoogleSignIn = async (e? : React.FormEvent) => {
+    if (e) {
+      e.preventDefault();
+    }
+
+    const provider = new GoogleAuthProvider();
+    try {
+        await signInWithPopup(auth, provider);
+        // User signed in successfully, redirect or update UI
+        router.push('/')
+    } catch (error) {
+        console.error("Error signing in with Google:", error);
+    }
+};
 
   const signIn = async (e?: React.FormEvent) => {
     if (e) {
@@ -86,7 +101,7 @@ export function SignupForm({ ...props }: React.ComponentProps<typeof Card>) {
             <FieldGroup>
               <Field>
                 <Button type="submit" onClick={signIn} >Create Account</Button>
-                <Button variant="outline" type="button">
+                <Button onClick={handleGoogleSignIn} variant="outline" type="button">
                   Sign up with Google
                 </Button>
                 <FieldDescription className="px-6 text-center">

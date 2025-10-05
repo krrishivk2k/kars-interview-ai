@@ -10,10 +10,8 @@ import { auth } from '../config/firebase-config'
 import { useRouter } from 'next/navigation'
 
 const menuItems = [
-    { name: 'Features', href: '#link' },
-    { name: 'Solution', href: '#link' },
-    { name: 'Pricing', href: '#link' },
-    { name: 'About', href: '#link' },
+    { name: 'Chats', href: '/chats' },
+    { name: 'Support', href: '#link' },
 ]
 
 export const Header = () => {
