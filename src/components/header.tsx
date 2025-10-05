@@ -1,10 +1,13 @@
 'use client'
 import Link from 'next/link'
-import { Menu, X } from 'lucide-react'
+import { Menu, X, LogOut } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import React from 'react'
 import { cn } from '@/lib/utils'
 import { ModeToggle } from './ui/theme-toggle'
+import { onAuthStateChanged, User, signOut } from 'firebase/auth'
+import { auth } from '../config/firebase-config'
+import { useRouter } from 'next/navigation'
 
 const menuItems = [
     { name: 'Features', href: '#link' },
@@ -16,6 +19,9 @@ const menuItems = [
 export const Header = () => {
     const [menuState, setMenuState] = React.useState(false)
     const [isScrolled, setIsScrolled] = React.useState(false)
+    const [user, setUser] = React.useState<User | null>(null)
+    const [loading, setLoading] = React.useState(true)
+    const router = useRouter()
 
     React.useEffect(() => {
         const handleScroll = () => {
@@ -24,6 +30,25 @@ export const Header = () => {
         window.addEventListener('scroll', handleScroll)
         return () => window.removeEventListener('scroll', handleScroll)
     }, [])
+
+    // Check authentication status
+    React.useEffect(() => {
+        const unsubscribe = onAuthStateChanged(auth, (user) => {
+            setUser(user)
+            setLoading(false)
+        })
+
+        return () => unsubscribe()
+    }, [])
+
+    const handleSignOut = async () => {
+        try {
+            await signOut(auth)
+            router.push('/')
+        } catch (error) {
+            console.error('Error signing out:', error)
+        }
+    }
     return (
         <header>
             <nav
@@ -79,31 +104,59 @@ export const Header = () => {
 
                             <ModeToggle />
                             <div className="flex w-full flex-col space-y-3 sm:flex-row sm:gap-3 sm:space-y-0 md:w-fit">
-                                <Button
-                                    asChild
-                                    variant="outline"
-                                    size="sm"
-                                    className={cn(isScrolled && 'lg:hidden')}>
-                                    <Link href="#">
-                                        <span>Login</span>
-                                    </Link>
-                                </Button>
-                                <Button
-                                    asChild
-                                    size="sm"
-                                    className={cn(isScrolled && 'lg:hidden')}>
-                                    <Link href="#">
-                                        <span>Sign Up</span>
-                                    </Link>
-                                </Button>
-                                <Button
-                                    asChild
-                                    size="sm"
-                                    className={cn(isScrolled ? 'lg:inline-flex' : 'hidden')}>
-                                    <Link href="#">
-                                        <span>Get Started</span>
-                                    </Link>
-                                </Button>
+                                {!loading && (
+                                    <>
+                                        {user ? (
+                                            // Show sign out button when logged in
+                                            <>
+                                                <Button
+                                                    onClick={handleSignOut}
+                                                    variant="outline"
+                                                    size="sm"
+                                                    className={cn(isScrolled && 'lg:hidden')}>
+                                                    <LogOut className="w-4 h-4 mr-2" />
+                                                    <span>Sign Out</span>
+                                                </Button>
+                                                <Button
+                                                    onClick={handleSignOut}
+                                                    size="sm"
+                                                    className={cn(isScrolled ? 'lg:inline-flex' : 'hidden')}>
+                                                    <LogOut className="w-4 h-4 mr-2" />
+                                                    <span>Sign Out</span>
+                                                </Button>
+                                            </>
+                                        ) : (
+                                            // Show login/signup buttons when not logged in
+                                            <>
+                                                <Button
+                                                    asChild
+                                                    variant="outline"
+                                                    size="sm"
+                                                    className={cn(isScrolled && 'lg:hidden')}>
+                                                    <Link href="/login">
+                                                        <span>Login</span>
+                                                    </Link>
+                                                </Button>
+                                                <Button
+                                                    asChild
+                                                    size="sm"
+                                                    className={cn(isScrolled && 'lg:hidden')}>
+                                                    <Link href="/signup">
+                                                        <span>Sign Up</span>
+                                                    </Link>
+                                                </Button>
+                                                <Button
+                                                    asChild
+                                                    size="sm"
+                                                    className={cn(isScrolled ? 'lg:inline-flex' : 'hidden')}>
+                                                    <Link href="/login">
+                                                        <span>Get Started</span>
+                                                    </Link>
+                                                </Button>
+                                            </>
+                                        )}
+                                    </>
+                                )}
                             </div>
                         </div>
                     </div>

@@ -1,3 +1,5 @@
+'use client'
+
 import { Button } from "@/components/ui/button"
 import {
   Card,
@@ -14,7 +16,30 @@ import {
 } from "@/components/ui/field"
 import { Input } from "@/components/ui/input"
 
+import { auth } from "../config/firebase-config"
+import { createUserWithEmailAndPassword } from "firebase/auth"
+import { useState } from "react"
+import { useRouter } from "next/navigation"
+
 export function SignupForm({ ...props }: React.ComponentProps<typeof Card>) {
+
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const router = useRouter();
+
+  const signIn = async (e?: React.FormEvent) => {
+    if (e) {
+      e.preventDefault(); // Prevent default form submission
+    }
+
+    try {
+      await createUserWithEmailAndPassword(auth, email, password);
+      router.push('/');
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
   return (
     <Card {...props}>
       <CardHeader>
@@ -36,6 +61,7 @@ export function SignupForm({ ...props }: React.ComponentProps<typeof Card>) {
                 id="email"
                 type="email"
                 placeholder="m@example.com"
+                onChange={(e) => setEmail(e.target.value)}
                 required
               />
               <FieldDescription>
@@ -45,7 +71,7 @@ export function SignupForm({ ...props }: React.ComponentProps<typeof Card>) {
             </Field>
             <Field>
               <FieldLabel htmlFor="password">Password</FieldLabel>
-              <Input id="password" type="password" required />
+              <Input id="password" type="password" onChange={(e) => setPassword(e.target.value)} required/>
               <FieldDescription>
                 Must be at least 8 characters long.
               </FieldDescription>
@@ -59,7 +85,7 @@ export function SignupForm({ ...props }: React.ComponentProps<typeof Card>) {
             </Field>
             <FieldGroup>
               <Field>
-                <Button type="submit">Create Account</Button>
+                <Button type="submit" onClick={signIn} >Create Account</Button>
                 <Button variant="outline" type="button">
                   Sign up with Google
                 </Button>
