@@ -15,9 +15,10 @@ import { auth, db } from '../config/firebase-config';
 
 interface CameraRecorderProps {
   onAnalysisComplete?: (result: any, transcript: { message: string; source: string }[]) => void;
+  roleInfo?: any;
 }
 
-export default function CameraRecorder({ onAnalysisComplete }: CameraRecorderProps) {
+export default function CameraRecorder({ onAnalysisComplete, roleInfo }: CameraRecorderProps) {
    const videoRef = useRef<HTMLVideoElement>(null);
    // const audioRef = useRef<HTMLAudioElement>(null);
    const [recorder, setRecorder] = useState<MediaRecorder | null>(null);
@@ -54,8 +55,8 @@ export default function CameraRecorder({ onAnalysisComplete }: CameraRecorderPro
       
        onError: (error) => console.error('Error:', error),
    });
-   const buildInterviewPrompt = (company: any, role: any) => `
-       You are acting as a calm and professional AI interviewer conducting a mock interview for a candidate applying to the position of "${role}" at "${company}".
+   const buildInterviewPrompt = ( role: any) => `
+       You are acting as a calm and professional AI interviewer conducting a interview for a candidate applying to the position of "${role}".
 
 
        Use the following exact questions in order, asking one at a time:
@@ -65,7 +66,7 @@ export default function CameraRecorder({ onAnalysisComplete }: CameraRecorderPro
        2. What's a challenging problem you've solved in the past year?
        3. How do you approach working in a team?
        4. Describe a time you received critical feedback and how you handled it.
-       5. Why do you want to work at ${company}?
+       5. Why do you want to work at ${role}?
 
 
        Instructions:
@@ -74,6 +75,9 @@ export default function CameraRecorder({ onAnalysisComplete }: CameraRecorderPro
        - Wait silently after each question.
        - Do not change or rephrase the questions.
        - Do not offer feedback between questions.
+       - If applicable, ask follow up questions to the candidate's response.
+       - After the 5 preset questions, ask the candidate about job description and role specific questions.
+       - If job description or role is not well defined, do not ask any additional questions after the 5 preset questions.
    `;
 
 
@@ -277,7 +281,7 @@ export default function CameraRecorder({ onAnalysisComplete }: CameraRecorderPro
                overrides: {
                    agent: {
                        prompt: {
-                           prompt: buildInterviewPrompt(selectedCompany, selectedRole) // Optional: override the system prompt.
+                           prompt: buildInterviewPrompt(roleInfo || { role: selectedRole }) // Optional: override the system prompt.
                        },
                        language: "en" // Optional: override the language.
                    },

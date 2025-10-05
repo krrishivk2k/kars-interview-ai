@@ -33,6 +33,7 @@ import Recorder from '@/components/recorder'
 
 import { config } from '../../analysis/HACKRU/config'
 import { GoogleGenerativeAI } from '@google/generative-ai'
+import { analyzeJobDescription } from '../../utils/jobAnalysis'
 
 const genAI = new GoogleGenerativeAI(config.googleApiKey);
 
@@ -191,6 +192,9 @@ export default function ChatsPage() {
     const [showInterviewModal, setShowInterviewModal] = useState(false)
     const [interviewResult, setInterviewResult] = useState<any>(null)
     const [interviewTranscript, setInterviewTranscript] = useState<{ message: string; source: string }[]>([])
+    const [jobDescription, setJobDescription] = useState<string>('')
+    const [showJobDescriptionPrompt, setShowJobDescriptionPrompt] = useState(false)
+    const [roleInfo, setRoleInfo] = useState<any>(null)
     const messagesEndRef = useRef<HTMLDivElement>(null)
     const router = useRouter()
 
@@ -216,6 +220,13 @@ export default function ChatsPage() {
     useEffect(() => {
         messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
     }, [currentChat?.messages])
+
+    // Show job description prompt for new chats
+    useEffect(() => {
+        if (currentChat && currentChat.messages.length === 0) {
+            setShowJobDescriptionPrompt(true)
+        }
+    }, [currentChat])
 
     // Create new chat
     const createNewChat = async () => {
@@ -385,14 +396,38 @@ export default function ChatsPage() {
     }
 
     // Handle interview analysis result
-    const handleAnalysisComplete = (result: any, transcript: { message: string; source: string }[]) => {
+    const handleAnalysisComplete = async (result: any, transcript: { message: string; source: string }[]) => {
         setInterviewResult(result)
         setInterviewTranscript(transcript)
-        console.log('Interview analysis result received:', result)
-        console.log('Interview transcript received:', transcript)
         
         // Add both result and transcript as messages to the current chat
         if (currentChat && user) {
+
+            // Find job description from chat messages
+            const jobDescMessage = currentChat.messages.find(msg => 
+                msg.content.includes('Job Description Added')
+            )
+            const jobDesc = jobDescMessage ? 
+                jobDescMessage.content.replace('**Job Description Added:**\n\n', '') : 
+                'No job description provided'
+
+            const prompt = `You are an brutally honest hiring manager at a top firm with 15+ years of experience. Your job is to listen to an interview by a rookie and critique their response to help them improve. Your feedback should be specific, quantifiable, and actionable. Here is the job description for the role:\n\n${jobDesc}\n\n
+            Here is the interview transcript:\n${transcript.map(t => `**${t.source}:** ${t.message}`).join('\n\n')}\n\n
+            Here is the analysis of the interview in json format(Make sure to include this mood analysis in your response): ${JSON.stringify(result, null, 2)}\n\n
+            Please provide detailed feedback on the candidate's performance, strengths, areas for improvement, and specific recommendations based on the job requirements.`;
+
+            const model = genAI.getGenerativeModel({ model: config.geminiModel });
+            const chatSession = model.startChat({
+                history: currentChat.messages.map((m) => ({
+                    role: m.role === 'user' ? 'user' : 'model',
+                    parts: [{ text: m.content }],
+                })),
+            });
+
+            const aiResult = await chatSession.sendMessage(prompt);
+            const response = aiResult.response;
+            const text = response.text();
+
             // Create transcript message
             const transcriptMessage: Message = {
                 id: (Date.now() + 1).toString(),
@@ -404,7 +439,14 @@ export default function ChatsPage() {
             // Create analysis result message
             const analysisMessage: Message = {
                 id: Date.now().toString(),
-                content: `**Interview Analysis Complete!**\n\n**Results:**\n${JSON.stringify(result, null, 2)}`,
+                content: `**Interview Analysis Complete!**\n\n${text}`,
+                role: 'assistant',
+                timestamp: new Date()
+            }
+
+            const finalMessage: Message = {
+                id: Date.now().toString(),
+                content: `**Interview Analysis Complete!**\n\n${text}`,
                 role: 'assistant',
                 timestamp: new Date()
             }
@@ -416,8 +458,9 @@ export default function ChatsPage() {
             }
             
             // Save both messages to Firestore
-            addMessageToChat(user.uid, currentChat.id, transcriptMessage.content, transcriptMessage.role)
-            addMessageToChat(user.uid, currentChat.id, analysisMessage.content, analysisMessage.role)
+            // addMessageToChat(user.uid, currentChat.id, transcriptMessage.content, transcriptMessage.role)
+            // addMessageToChat(user.uid, currentChat.id, analysisMessage.content, analysisMessage.role)
+            addMessageToChat(user.uid, currentChat.id, finalMessage.content, finalMessage.role)
             
             // Update local state
             setCurrentChat(updatedChat)
@@ -428,6 +471,36 @@ export default function ChatsPage() {
         
         // Close the modal
         setShowInterviewModal(false)
+    }
+
+    // Handle job description submission
+    const handleJobDescriptionSubmit = async () => {
+        if (!jobDescription.trim() || !currentChat || !user) return
+
+        const jobDescMessage: Message = {
+            id: Date.now().toString(),
+            content: `**Job Description Added:**\n\n${jobDescription}`,
+            role: 'user',
+            timestamp: new Date()
+        }
+
+        // Update current chat with job description message
+        const updatedChat = {
+            ...currentChat,
+            messages: [...currentChat.messages, jobDescMessage]
+        }
+
+        // Save to Firestore
+        addMessageToChat(user.uid, currentChat.id, jobDescMessage.content, jobDescMessage.role)
+
+        // Update local state
+        setCurrentChat(updatedChat)
+        setChats(prev => prev.map(chat => 
+            chat.id === currentChat.id ? updatedChat : chat
+        ))
+
+        // Close the prompt
+        setShowJobDescriptionPrompt(false)
     }
 
     if (loading) {
@@ -781,7 +854,62 @@ export default function ChatsPage() {
                         </Button>
                     </div>
                     <div className="p-4 overflow-y-auto max-h-[calc(90vh-80px)]">
-                        <Recorder onAnalysisComplete={handleAnalysisComplete} />
+                        <Recorder onAnalysisComplete={handleAnalysisComplete} roleInfo={roleInfo} />
+                    </div>
+                </div>
+            </div>
+        )}
+
+        {/* Job Description Prompt Modal */}
+        {showJobDescriptionPrompt && (
+            <div 
+                className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4"
+                onClick={(e) => {
+                    if (e.target === e.currentTarget) {
+                        setShowJobDescriptionPrompt(false)
+                    }
+                }}
+            >
+                <div 
+                    className="bg-background rounded-lg shadow-lg max-w-2xl w-full max-h-[80vh] overflow-hidden"
+                    onClick={(e) => e.stopPropagation()}
+                >
+                    <div className="flex items-center justify-between p-4 border-b border-border">
+                        <h2 className="text-lg font-semibold">Add Job Description</h2>
+                        <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => setShowJobDescriptionPrompt(false)}
+                        >
+                            <X className="w-4 h-4" />
+                        </Button>
+                    </div>
+                    <div className="p-4">
+                        <div className="space-y-4">
+                            <p className="text-sm text-muted-foreground">
+                                Please paste the job description for the role you're interviewing for. This will help the AI provide more targeted feedback.
+                            </p>
+                            <textarea
+                                value={jobDescription}
+                                onChange={(e) => setJobDescription(e.target.value)}
+                                placeholder="Paste the job description here..."
+                                className="w-full h-64 p-3 border border-border rounded-lg resize-none focus:outline-none focus:ring-2 focus:ring-primary"
+                            />
+                            <div className="flex justify-end gap-2">
+                                <Button
+                                    variant="outline"
+                                    onClick={() => setShowJobDescriptionPrompt(false)}
+                                >
+                                    Skip
+                                </Button>
+                                <Button
+                                    onClick={handleJobDescriptionSubmit}
+                                    disabled={!jobDescription.trim()}
+                                >
+                                    Add Job Description
+                                </Button>
+                            </div>
+                        </div>
                     </div>
                 </div>
             </div>
