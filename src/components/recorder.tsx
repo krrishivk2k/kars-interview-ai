@@ -129,21 +129,11 @@ export default function CameraRecorder() {
             // Create a new stream with both video and audio
             const recordingStream = new MediaStream([videoTrack, audioTrack]);
             
+            // Check for MP4 support first, fallback to WebM
+            const mimeType = MediaRecorder.isTypeSupported('video/mp4') 
+                ? 'video/mp4' 
+                : 'video/webm;codecs=vp9,opus';
 
-            // Try to find a supported MIME type
-            let mimeType = "video/webm;codecs=vp9,opus";
-            if (!MediaRecorder.isTypeSupported(mimeType)) {
-                mimeType = "video/webm;codecs=vp8,opus";
-                if (!MediaRecorder.isTypeSupported(mimeType)) {
-                    mimeType = "video/webm";
-                    if (!MediaRecorder.isTypeSupported(mimeType)) {
-                        mimeType = ""; // Let browser choose
-                    }
-                }
-            }
-            
-            console.log("Using MIME type:", mimeType);
-            
             const newRecorder = new MediaRecorder(recordingStream, {
                 mimeType: mimeType,
                 videoBitsPerSecond: 2500000, // 2.5 Mbps for good quality
@@ -154,43 +144,23 @@ export default function CameraRecorder() {
 
             newRecorder.ondataavailable = (e) => {
                 if (e.data.size > 0) {
-                    console.log("Data chunk received:", e.data.size, "bytes");
                     chunksRef.current.push(e.data);
-                    setChunks((prev) => {
-                        const newChunks = [...prev, e.data];
-                        console.log("Total chunks so far:", newChunks.length);
-                        return newChunks;
-                    });
+                    setChunks((prev) => [...prev, e.data]);
                 }
             };
 
 
             newRecorder.onstop = () => {
-
-                console.log("Recording stopped, processing chunks...");
-                
                 // Get all chunks from the ref
                 const allChunks = [...chunksRef.current];
-                console.log("Creating blob with chunks:", allChunks.length);
-                
-                if (allChunks.length === 0) {
-                    console.error("No chunks recorded!");
-                    return;
-                }
-                
-                const blob = new Blob(allChunks, { type: mimeType || "video/webm" });
+                const blob = new Blob(allChunks, { type: mimeType });
                 const url = URL.createObjectURL(blob);
                 console.log("Video with audio URL:", url);
-                console.log("Total chunks recorded:", allChunks.length);
-                console.log("Blob size:", blob.size, "bytes");
-                
-                // Store the blob and URLs for preview and download
+                console.log("Recording format:", mimeType);
                 setRecordedBlob(blob);
-                setDownloadUrl(url);
-                setPreviewUrl(url); // Same URL for preview
+                setRecordedVideoUrl(url);
                 setChunks([]);
                 chunksRef.current = []; // Clear the ref
-
                 
                 // Stop the audio stream when recording stops
                 audioStream.getTracks().forEach(track => track.stop());
