@@ -61,10 +61,10 @@ const features = [
 ]
 
 const stats = [
-    { number: "95%", label: "Success Rate", icon: TrendingUp },
-    { number: "10K+", label: "Interviews Practiced", icon: Users },
-    { number: "2.5x", label: "Faster Preparation", icon: Clock },
-    { number: "4.9/5", label: "User Rating", icon: Star }
+    { number: "50%", label: "Success Rate", icon: TrendingUp },
+    { number: "10+", label: "Interviews Practiced", icon: Users },
+    { number: "2x", label: "Faster Preparation", icon: Clock },
+    { number: "4.8/5", label: "User Rating", icon: Star }
 ]
 
 export default function LandingPage() {
