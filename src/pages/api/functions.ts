@@ -144,9 +144,15 @@ function runPython(mode: string, filePath: string): Promise<any> {
     });
 
     py.stderr.on('data', (err: Buffer) => {
-      console.error(`[${mode} stderr]:`, err.toString());
+      const msg = err.toString().trim();
+      // Ignore Mediapipe and TensorFlow logs
+      if (!msg.startsWith('W0000') && !msg.startsWith('I0000') && !msg.includes('delegate')) {
+        console.error(`[${mode} stderr]:`, msg);
+      } else {
+        console.log(`[${mode} log suppressed]:`, msg);
+      }
     });
-
+    
     py.on('close', (code: number) => {
       if (code !== 0) {
         return reject(new Error(`${mode} script exited with code ${code}`));

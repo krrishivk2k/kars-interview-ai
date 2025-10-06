@@ -6,12 +6,23 @@ import time
 import threading
 from queue import Queue
 import sys
+import os
+
+# --- CRITICAL FIX: SUPPRESS LIBRARY LOGGING TO PREVENT INVALID JSON OUTPUT ---
+# Suppresses all but FATAL errors from TensorFlow/MediaPipe C++
+os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
+# Suppresses Google logging (MediaPipe)
+os.environ['GLOG_minloglevel'] = '2'
+# Suppress Python logging
+import logging
+logging.getLogger().setLevel(logging.ERROR)
+# -----------------------------------------------------------------------------
 
 def hand(video_file):
     VIDEO_FILE = video_file
     PROCESS_WIDTH = 240
-    CALIBRATION_DURATION = 2.0
-    FRAME_SKIP_RATE = 30
+    CALIBRATION_DURATION = 3.0  # Increased for leniency
+    FRAME_SKIP_RATE = 10        # Reduced for better sample collection
     MOVEMENT_THRESHOLD = 0.05
     WRIST_LANDMARK = 0
 
@@ -19,6 +30,7 @@ def hand(video_file):
         def __init__(self, src, queue_size=128):
             self.stream = cv2.VideoCapture(src)
             if not self.stream.isOpened():
+                print(f"[ERROR] Could not open video file: {src}", file=sys.stderr)
                 raise IOError
             self.stopped = False
             self.Q = Queue(maxsize=queue_size)
@@ -26,8 +38,8 @@ def hand(video_file):
             self.t.daemon = True
 
         def start(self):
-            self.t.start()
-            self.Q.join()
+            if not self.t.is_alive():
+                self.t.start()
             return self
 
         def update(self):
@@ -36,9 +48,12 @@ def hand(video_file):
                 if not success:
                     self.stopped = True
                     break
-                frame_resized = cv2.resize(frame, (PROCESS_WIDTH, int(frame.shape[0] * PROCESS_WIDTH / frame.shape[1])))
-                self.Q.put(frame_resized)
-                self.Q.task_done()
+                if frame is not None:
+                    frame_resized = cv2.resize(frame, (PROCESS_WIDTH, int(frame.shape[0] * PROCESS_WIDTH / frame.shape[1])))
+                    self.Q.put(frame_resized)
+                else:
+                    self.stopped = True
+                    break
             self.stream.release()
 
         def read(self):
@@ -67,13 +82,13 @@ def hand(video_file):
     try:
         vs = VideoStream(VIDEO_FILE).start()
     except IOError as e:
-        exit()
+        sys.exit(1)
 
     with mp_hands.Hands(
             model_complexity=0, 
             max_num_hands=1,
             min_detection_confidence=0.5,
-            min_tracking_confidence=0.3) as hands:
+            min_tracking_confidence=0.5) as hands: # Tracking confidence slightly increased
 
         baseline_samples = []
         start_time = time.time()
@@ -87,38 +102,40 @@ def hand(video_file):
                 if wrist_y is not None:
                     baseline_samples.append(wrist_y)
             calibration_frame_count += 1
-
+            
+        # --- GRACEFUL FAILURE CHECK FOR HANDS ---
         if not baseline_samples:
             vs.stop()
-            exit()
+            # Log a warning to stderr
+            print("[WARNING] Hand calibration failed: No samples collected. Returning 0.0.", file=sys.stderr)
+            final_goodness = 0.0
+            
+        else:
+            baseline_y = np.mean(baseline_samples)
+            total_frames = 0
+            tracking_frame_count = 0
+            start_tracking = time.time()
+            good_movement_frames = 0 
 
-        baseline_y = np.mean(baseline_samples)
-    
+            while vs.more():
+                frame = vs.read()
+                total_frames += 1
+                if tracking_frame_count % FRAME_SKIP_RATE == 0:
+                    wrist_y = analyze_hand_position(frame, hands)
+                    if wrist_y is not None:
+                        diff = wrist_y - baseline_y
+                        if abs(diff) > MOVEMENT_THRESHOLD:
+                            good_movement_frames += 1
+                tracking_frame_count += 1
 
-        total_frames = 0
-        tracking_frame_count = 0
-        start_tracking = time.time()
-        good_movement_frames = 0 
+            vs.stop()
+            final_goodness = (good_movement_frames / total_frames) * 100 if total_frames > 0 else 0.0
+        # ----------------------------------------
 
-        while vs.more():
-            frame = vs.read()
-            total_frames += 1
-            if tracking_frame_count % FRAME_SKIP_RATE == 0:
-                wrist_y = analyze_hand_position(frame, hands)
-                if wrist_y is not None:
-                    diff = wrist_y - baseline_y
-                    if abs(diff) > MOVEMENT_THRESHOLD:
-                        good_movement_frames += 1
-            tracking_frame_count += 1
-
-        duration = time.time() - start_tracking
-        final_goodness = (good_movement_frames / total_frames) * 100 if total_frames > 0 else 0.0
-
-
-    vs.stop()
+    # Ensure final JSON print happens successfully
     result = {"hand": final_goodness}
     print(json.dumps(result))
-    return result
+
 
 def mood(video_path):
     VIDEO_FILE = video_path
@@ -129,6 +146,7 @@ def mood(video_path):
         def __init__(self, src, queue_size=128):
             self.stream = cv2.VideoCapture(src)
             if not self.stream.isOpened():
+                print(f"[ERROR] Could not open video file: {src}", file=sys.stderr)
                 raise IOError
             self.stopped = False
             self.Q = Queue(maxsize=queue_size)
@@ -145,8 +163,12 @@ def mood(video_path):
                 if not success:
                     self.stopped = True
                     break
-                frame = cv2.resize(frame, (PROCESS_WIDTH, int(frame.shape[0] * PROCESS_WIDTH / frame.shape[1])))
-                self.Q.put(frame)
+                if frame is not None:
+                    frame = cv2.resize(frame, (PROCESS_WIDTH, int(frame.shape[0] * PROCESS_WIDTH / frame.shape[1])))
+                    self.Q.put(frame)
+                else:
+                    self.stopped = True
+                    break
             self.stream.release()
             
         def read(self):
@@ -161,10 +183,7 @@ def mood(video_path):
                 self.t.join()
 
     def analyze_mood(frame, face_mesh_model):
-        frame_h, frame_w, _ = frame.shape
-        scale_factor = PROCESS_WIDTH / frame_w
-        small_frame = cv2.resize(frame, (PROCESS_WIDTH, int(frame_h * scale_factor)))
-        rgb = cv2.cvtColor(small_frame, cv2.COLOR_BGR2RGB)
+        rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
         res = face_mesh_model.process(rgb)
         mood_score = None
         if res.multi_face_landmarks:
@@ -184,7 +203,7 @@ def mood(video_path):
     try:
         vs = VideoStream(VIDEO_FILE).start()
     except IOError as e:
-        exit()
+        sys.exit(1)
 
     with mp_face_mesh.FaceMesh(
             max_num_faces=1,
@@ -193,7 +212,6 @@ def mood(video_path):
             min_tracking_confidence=0.3) as face_mesh:
 
         all_mood_scores = []
-        current_mood_score = 0.0
         total_frames = 0
         tracking_frame_count = 0
         start_tracking = time.time()
@@ -205,33 +223,36 @@ def mood(video_path):
             if tracking_frame_count % FRAME_SKIP_RATE == 0:
                 score = analyze_mood(frame, face_mesh)
                 if score is not None:
-                    current_mood_score = score
                     all_mood_scores.append(score)
             tracking_frame_count += 1
 
-        duration = time.time() - start_tracking
-        if all_mood_scores:
-            overall_avg_score = np.mean(all_mood_scores)
-            if overall_avg_score > 0.75:
-                overall_mood = "OVERALL: Positive"
-            elif overall_avg_score < 0.45:
-                overall_mood = "OVERALL: Negative"
-            else:
-                overall_mood = "OVERALL: Neutral"
-        else:
-            overall_mood = "OVERALL: Unknown"
-            overall_avg_score = 0.0
-
     vs.stop()
+    
+    # --- GRACEFUL FAILURE CHECK FOR MOOD ---
+    if all_mood_scores:
+        overall_avg_score = np.mean(all_mood_scores)
+        if overall_avg_score > 0.75:
+            overall_mood = "OVERALL: Positive"
+        elif overall_avg_score < 0.45:
+            overall_mood = "OVERALL: Negative"
+        else:
+            overall_mood = "OVERALL: Neutral"
+    else:
+        # Log a warning to stderr
+        print("[WARNING] Mood analysis failed: No face detected. Returning No Detection.", file=sys.stderr)
+        overall_mood = "OVERALL: No Detection"
+        overall_avg_score = 0.0
+    # ---------------------------------------
+
+    # Ensure final JSON print happens successfully
     result = {"mood": overall_mood, "score": overall_avg_score}
     print(json.dumps(result))
-    return result
 
 
 if __name__ == "__main__":
     if len(sys.argv) < 3:
-        print(f"[ERROR] Insufficient args: {sys.argv}")
-        print("Usage: python analyze.py [mood|hand] path/to/video.mp4")
+        print(f"[ERROR] Insufficient args: {sys.argv}", file=sys.stderr)
+        print("Usage: python analyze.py [mood|hand] path/to/video.mp4", file=sys.stderr)
         sys.exit(1)
 
     mode = sys.argv[1]
@@ -242,4 +263,5 @@ if __name__ == "__main__":
     elif mode == "mood":
         mood(video_path)
     else:
-        exit(1)
+        print(f"[ERROR] Invalid mode: {mode}", file=sys.stderr)
+        sys.exit(1)

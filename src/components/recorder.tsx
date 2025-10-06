@@ -372,7 +372,6 @@ export default function CameraRecorder({ onAnalysisComplete, roleInfo }: CameraR
        }
     
       const result = await res.json();
-      alert('Analysis complete! See console.');
       console.log('✅ Final Analysis Result:', result);
       
       // Pass result and transcript back to parent component
