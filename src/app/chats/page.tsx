@@ -32,10 +32,30 @@ import { ModeToggle } from '@/components/ui/theme-toggle'
 import Recorder from '@/components/recorder'
 
 import { config } from '../../analysis/HACKRU/config'
-import { GoogleGenerativeAI } from '@google/generative-ai'
 import { analyzeJobDescription } from '../../utils/jobAnalysis'
 
-const genAI = new GoogleGenerativeAI(config.googleApiKey);
+// Helper function to call server-side Google AI API
+const generateContent = async (prompt: string, model: string = config.geminiModel, history: any[] = []) => {
+  try {
+    const response = await fetch('/api/generate', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ prompt, model, history }),
+    });
+
+    if (!response.ok) {
+      throw new Error(`HTTP error! status: ${response.status}`);
+    }
+
+    const data = await response.json();
+    return data.text;
+  } catch (error) {
+    console.error('Error generating content:', error);
+    throw error;
+  }
+};
 
 // Function to build interview prompt based on job description
 export const buildInterviewPrompt = (jobDescription: string) => `
@@ -307,17 +327,7 @@ export default function ChatsPage() {
         setIsTyping(true)
 
         const prompt = userMessage.content;
-        const model = genAI.getGenerativeModel({ model: config.geminiModel });
-        const chatSession = model.startChat({
-            history: currentChat.messages.map((m) => ({
-                role: m.role === 'user' ? 'user' : 'model',
-                parts: [{ text: m.content }],
-            })),
-        });
-
-        const result = await chatSession.sendMessage(inputMessage);
-        const response = result.response;
-        const text = response.text();
+        const text = await generateContent(inputMessage, config.geminiModel, currentChat.messages);
 
         // Simulate AI response (replace with actual AI integration)
         setTimeout(() => {
@@ -445,17 +455,7 @@ export default function ChatsPage() {
             Here is the analysis of the interview in json format(Make sure to include this mood analysis in your response): ${JSON.stringify(result, null, 2)}\n\n
             Please provide detailed feedback on the candidate's performance, strengths, areas for improvement, and specific recommendations based on the job requirements.`;
 
-            const model = genAI.getGenerativeModel({ model: config.geminiModel });
-            const chatSession = model.startChat({
-                history: currentChat.messages.map((m) => ({
-                    role: m.role === 'user' ? 'user' : 'model',
-                    parts: [{ text: m.content }],
-                })),
-            });
-
-            const aiResult = await chatSession.sendMessage(prompt);
-            const response = aiResult.response;
-            const text = response.text();
+            const text = await generateContent(prompt, config.geminiModel, currentChat.messages);
 
             // Create transcript message
             const transcriptMessage: Message = {
@@ -539,19 +539,9 @@ export default function ChatsPage() {
 
         // Generate AI response to job description
         try {
-            const model = genAI.getGenerativeModel({ model: config.geminiModel });
-            const chatSession = model.startChat({
-                history: updatedChat.messages.map((m) => ({
-                    role: m.role === 'user' ? 'user' : 'model',
-                    parts: [{ text: m.content }],
-                })),
-            });
-
             const prompt = `I've received the job description for this interview. Please provide a brief acknowledgment and overview of what we'll be focusing on during the interview based on this role. Keep it concise and encouraging.`;
             
-            const result = await chatSession.sendMessage(prompt);
-            const response = result.response;
-            const text = response.text();
+            const text = await generateContent(prompt, config.geminiModel, updatedChat.messages);
 
             // Add AI response
             const aiResponseMessage: Message = {
@@ -583,17 +573,7 @@ export default function ChatsPage() {
                     // Generate a tailored interview prompt based on chat context
                     const contextPrompt = `Based on our conversation so far, create a personalized interview prompt that references specific details from the job description and any other relevant context from our chat. The prompt should be encouraging and mention key aspects of the role that we'll be focusing on during the interview. Keep it concise but personalized.`;
                     
-                    const contextModel = genAI.getGenerativeModel({ model: config.geminiModel });
-                    const contextChatSession = contextModel.startChat({
-                        history: chatWithAIResponse.messages.map((m) => ({
-                            role: m.role === 'user' ? 'user' : 'model',
-                            parts: [{ text: m.content }],
-                        })),
-                    });
-
-                    const contextResult = await contextChatSession.sendMessage(contextPrompt);
-                    const contextResponse = contextResult.response;
-                    const contextText = contextResponse.text();
+                    const contextText = await generateContent(contextPrompt, config.geminiModel, chatWithAIResponse.messages);
 
                     const interviewPromptMessage: Message = {
                         id: (Date.now() + 2).toString(),
