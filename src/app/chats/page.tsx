@@ -37,6 +37,34 @@ import { analyzeJobDescription } from '../../utils/jobAnalysis'
 
 const genAI = new GoogleGenerativeAI(config.googleApiKey);
 
+// Function to build interview prompt based on job description
+export const buildInterviewPrompt = (jobDescription: string) => `
+    You are acting as a calm and professional AI interviewer conducting an interview for a candidate applying to a position.
+
+    Job Description:
+    ${jobDescription}
+
+    Use the following exact questions in order, asking one at a time. Tailor these questions to be relevant to the specific role and requirements mentioned in the job description:
+
+    1. Tell me about yourself and how your background aligns with this role.
+    2. What's a challenging problem you've solved in the past year that's relevant to this position?
+    3. How do you approach working in a team, especially in the context of this type of work?
+    4. Describe a time you received critical feedback and how you handled it, particularly in a professional setting.
+    5. Why are you interested in this specific role and what value do you think you can bring?
+
+    Instructions:
+    - Ask one question at a time.
+    - Tailor the 5 preset questions to be relevant to the specific job description and role requirements.
+    - Do not move to the next question until the candidate finishes speaking.
+    - Wait silently after each question.
+    - Do not change or rephrase the questions, but make them relevant to the job.
+    - Do not offer feedback between questions.
+    - If applicable, ask follow-up questions to the candidate's response that relate to the job requirements.
+    - After the 5 preset questions, ask 2-3 additional questions that are specific to the job description, role requirements, and technical skills mentioned.
+    - Focus on skills, experience, and qualities that are specifically mentioned in the job description.
+    - If the job description mentions specific technologies, tools, or methodologies, incorporate questions about those.
+`;
+
 // Function to format message content with markdown-like syntax
 function formatMessageContent(content: string) {
     return content
@@ -412,7 +440,7 @@ export default function ChatsPage() {
                 jobDescMessage.content.replace('**Job Description Added:**\n\n', '') : 
                 'No job description provided'
 
-            const prompt = `You are an brutally honest hiring manager at a top firm with 15+ years of experience. Your job is to listen to an interview by a rookie and critique their response to help them improve. Your feedback should be specific, quantifiable, and actionable. Here is the job description for the role:\n\n${jobDesc}\n\n
+            const prompt = `You are an honest hiring manager at a top firm with 15+ years of experience. Your job is to listen to an interview by a rookie and critique their response to help them improve. Your feedback should be specific, quantifiable, and actionable. Here is the job description for the role:\n\n${jobDesc}\n\n
             Here is the interview transcript:\n${transcript.map(t => `**${t.source}:** ${t.message}`).join('\n\n')}\n\n
             Here is the analysis of the interview in json format(Make sure to include this mood analysis in your response): ${JSON.stringify(result, null, 2)}\n\n
             Please provide detailed feedback on the candidate's performance, strengths, areas for improvement, and specific recommendations based on the job requirements.`;
@@ -502,6 +530,122 @@ export default function ChatsPage() {
 
         // Close the prompt
         setShowJobDescriptionPrompt(false)
+
+        // Set role info with job description for the recorder
+        setRoleInfo({ jobDescription: jobDescription })
+
+        // Show typing indicator
+        setIsTyping(true)
+
+        // Generate AI response to job description
+        try {
+            const model = genAI.getGenerativeModel({ model: config.geminiModel });
+            const chatSession = model.startChat({
+                history: updatedChat.messages.map((m) => ({
+                    role: m.role === 'user' ? 'user' : 'model',
+                    parts: [{ text: m.content }],
+                })),
+            });
+
+            const prompt = `I've received the job description for this interview. Please provide a brief acknowledgment and overview of what we'll be focusing on during the interview based on this role. Keep it concise and encouraging.`;
+            
+            const result = await chatSession.sendMessage(prompt);
+            const response = result.response;
+            const text = response.text();
+
+            // Add AI response
+            const aiResponseMessage: Message = {
+                id: (Date.now() + 1).toString(),
+                content: text,
+                role: 'assistant',
+                timestamp: new Date()
+            }
+
+            const chatWithAIResponse = {
+                ...updatedChat,
+                messages: [...updatedChat.messages, aiResponseMessage]
+            }
+
+            // Save AI response to Firestore
+            addMessageToChat(user.uid, currentChat.id, aiResponseMessage.content, aiResponseMessage.role)
+
+            // Update local state
+            setCurrentChat(chatWithAIResponse)
+            setChats(prev => prev.map(chat => 
+                chat.id === currentChat.id ? chatWithAIResponse : chat
+            ))
+
+            setIsTyping(false)
+
+            // After a delay, prompt to start the interview with context-aware message
+            setTimeout(async () => {
+                try {
+                    // Generate a tailored interview prompt based on chat context
+                    const contextPrompt = `Based on our conversation so far, create a personalized interview prompt that references specific details from the job description and any other relevant context from our chat. The prompt should be encouraging and mention key aspects of the role that we'll be focusing on during the interview. Keep it concise but personalized.`;
+                    
+                    const contextModel = genAI.getGenerativeModel({ model: config.geminiModel });
+                    const contextChatSession = contextModel.startChat({
+                        history: chatWithAIResponse.messages.map((m) => ({
+                            role: m.role === 'user' ? 'user' : 'model',
+                            parts: [{ text: m.content }],
+                        })),
+                    });
+
+                    const contextResult = await contextChatSession.sendMessage(contextPrompt);
+                    const contextResponse = contextResult.response;
+                    const contextText = contextResponse.text();
+
+                    const interviewPromptMessage: Message = {
+                        id: (Date.now() + 2).toString(),
+                        content: `**Ready to start your interview?** 🎤\n\n${contextText}\n\nClick the 'Enter Interview' button above when you're ready to begin!\n\n*Make sure you have a good internet connection and your camera/microphone are working properly.*`,
+                        role: 'assistant',
+                        timestamp: new Date()
+                    }
+
+                    const finalChat = {
+                        ...chatWithAIResponse,
+                        messages: [...chatWithAIResponse.messages, interviewPromptMessage]
+                    }
+
+                    // Save interview prompt to Firestore
+                    addMessageToChat(user.uid, currentChat.id, interviewPromptMessage.content, interviewPromptMessage.role)
+
+                    // Update local state
+                    setCurrentChat(finalChat)
+                    setChats(prev => prev.map(chat => 
+                        chat.id === currentChat.id ? finalChat : chat
+                    ))
+                } catch (error) {
+                    console.error('Error generating context-aware interview prompt:', error)
+                    
+                    // Fallback to generic prompt if context generation fails
+                    const fallbackPromptMessage: Message = {
+                        id: (Date.now() + 2).toString(),
+                        content: "**Ready to start your interview?** 🎤\n\nI'm ready to conduct your interview based on the job description you provided. Click the 'Enter Interview' button above when you're ready to begin!\n\n*Make sure you have a good internet connection and your camera/microphone are working properly.*",
+                        role: 'assistant',
+                        timestamp: new Date()
+                    }
+
+                    const finalChat = {
+                        ...chatWithAIResponse,
+                        messages: [...chatWithAIResponse.messages, fallbackPromptMessage]
+                    }
+
+                    // Save fallback prompt to Firestore
+                    addMessageToChat(user.uid, currentChat.id, fallbackPromptMessage.content, fallbackPromptMessage.role)
+
+                    // Update local state
+                    setCurrentChat(finalChat)
+                    setChats(prev => prev.map(chat => 
+                        chat.id === currentChat.id ? finalChat : chat
+                    ))
+                }
+            }, 3000) // 3 second delay
+
+        } catch (error) {
+            console.error('Error generating AI response:', error)
+            setIsTyping(false)
+        }
     }
 
     if (loading) {
