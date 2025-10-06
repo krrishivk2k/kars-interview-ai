@@ -28,6 +28,8 @@ const transitionVariants = {
 export default function HomePage() {
     return (
         <>
+            {/* Header component would likely go here, but since it's not provided, keeping it out of the main section */}
+            {/* <Header /> */}
 
             <main className="overflow-hidden [--color-primary-foreground:var(--color-white)] [--color-primary:var(--color-green-600)]">
                 <section>
@@ -37,9 +39,10 @@ export default function HomePage() {
                                 preset="fade-in-blur"
                                 speedSegment={0.3}
                                 as="h1"
-                                className="text-balance text-5xl font-medium md:text-6xl">
+                                className="text-balance text-5xl font-bold md:text-6xl">
                                 
-                                Interview AI
+                                Ace Your Interview with Personalized AI Coaching
+                                {/* Changed from "Interview AI" to a benefit-driven headline */}
 
                             </TextEffect>
                             <TextEffect
@@ -49,7 +52,8 @@ export default function HomePage() {
                                 delay={0.5}
                                 as="p"
                                 className="mx-auto mt-6 max-w-2xl text-pretty text-lg">
-                                Put your job application in the hands of AI and prepare for your mock interview to see what you need to work on.
+                                Upload your job application materials and let our AI analyze the role and your resume. Get instant, tailored mock interviews that pinpoint your weaknesses, refine your answers, and build the confidence you need to land the job.
+                                {/* Expanded the description to be more specific about the process and benefits */}
                             </TextEffect>
 
                             <AnimatedGroup
@@ -73,7 +77,8 @@ export default function HomePage() {
                                         <Upload className="pointer-events-none absolute inset-y-0 left-4 my-auto size-4" />
 
                                         <input
-                                            placeholder="Your mail address"
+                                            // Adjusted placeholder to better reflect the action of starting the process
+                                            placeholder="Enter your email to get started"
                                             className="h-12 w-full bg-transparent pl-12 focus:outline-none"
                                             type="email"
                                         />
@@ -83,7 +88,7 @@ export default function HomePage() {
                                                 aria-label="submit"
                                                 size="sm"
                                                 className="rounded-(--radius)">
-                                                <span className="hidden md:block">Get Started</span>
+                                                <span className="hidden sm:block">Sign Up</span>
                                                 <SendHorizonal
                                                     className="relative mx-auto size-5 md:hidden"
                                                     strokeWidth={2}

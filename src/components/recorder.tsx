@@ -9,6 +9,7 @@ import { onAuthStateChanged, User } from 'firebase/auth';
 import { getFirestore, doc, getDoc } from 'firebase/firestore';
 import { useRouter } from 'next/navigation';
 import { auth, db } from '../config/firebase-config';
+import { buildInterviewPrompt } from '../app/chats/page';
 
 
 
@@ -55,30 +56,6 @@ export default function CameraRecorder({ onAnalysisComplete, roleInfo }: CameraR
       
        onError: (error) => console.error('Error:', error),
    });
-   const buildInterviewPrompt = ( role: any) => `
-       You are acting as a calm and professional AI interviewer conducting a interview for a candidate applying to the position of "${role}".
-
-
-       Use the following exact questions in order, asking one at a time:
-
-
-       1. Tell me about yourself.
-       2. What's a challenging problem you've solved in the past year?
-       3. How do you approach working in a team?
-       4. Describe a time you received critical feedback and how you handled it.
-       5. Why do you want to work at ${role}?
-
-
-       Instructions:
-       - Ask one question at a time.
-       - Do not move to the next question until the candidate finishes speaking.
-       - Wait silently after each question.
-       - Do not change or rephrase the questions.
-       - Do not offer feedback between questions.
-       - If applicable, ask follow up questions to the candidate's response.
-       - After the 5 preset questions, ask the candidate about job description and role specific questions.
-       - If job description or role is not well defined, do not ask any additional questions after the 5 preset questions.
-   `;
 
 
 
@@ -281,7 +258,7 @@ export default function CameraRecorder({ onAnalysisComplete, roleInfo }: CameraR
                overrides: {
                    agent: {
                        prompt: {
-                           prompt: buildInterviewPrompt(roleInfo || { role: selectedRole }) // Optional: override the system prompt.
+                           prompt: buildInterviewPrompt(roleInfo?.jobDescription || "Software Engineer position") // Optional: override the system prompt.
                        },
                        language: "en" // Optional: override the language.
                    },
