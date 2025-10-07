@@ -1,7 +1,7 @@
 import { GoogleGenerativeAI } from '@google/generative-ai'
 import { config } from '../analysis/HACKRU/config'
 
-const genAI = new GoogleGenerativeAI(config.googleApiKey);
+const genAI = new GoogleGenerativeAI(process.env.GOOGLE_API_KEY!);
 
 export const analyzeJobDescription = async (jobDescription: string) => {
     try {
