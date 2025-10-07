@@ -1031,7 +1031,7 @@ export default function ChatsPage() {
                     <div className="p-4">
                         <div className="space-y-4">
                             <p className="text-sm text-muted-foreground">
-                                Please paste the job description for the role you're interviewing for. This will help the AI provide more targeted feedback.
+                                Please paste the job description for the role you\'re interviewing for. This will help the AI provide more targeted feedback.
                             </p>
                             <textarea
                                 value={jobDescription}
