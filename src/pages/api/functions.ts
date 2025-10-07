@@ -6,7 +6,7 @@ import type { NextApiRequest, NextApiResponse } from 'next';
 import { tmpdir } from 'os';
 import { exec } from 'child_process'; // 👈 added for optional ffmpeg conversion
 import ffmpegPath from 'ffmpeg-static';
-import ffmpeg from 'fluent-ffmpeg';
+// import ffmpeg from 'fluent-ffmpeg';
 
 type AnalysisResult = {
   mood: any;
@@ -17,7 +17,6 @@ export default async function handler(
   req: NextApiRequest,
   res: NextApiResponse<AnalysisResult | { error: string; details?: string }>
 ) {
-  ffmpeg.setFfmpegPath(ffmpegPath!);
   if (req.method !== 'POST') {
     return res.status(405).json({ error: 'Method Not Allowed' });
   }
@@ -43,18 +42,38 @@ export default async function handler(
 
       await downloadToFile(videoUrl, tempInputPath);
 
+
       await new Promise((resolve, reject) => {
-        ffmpeg(tempInputPath)
-          .outputOptions(['-c:v libx264', '-c:a aac'])
-          .save(tempOutputPath)
-          .on('end', () => {
-            console.log('[DEBUG] Conversion complete');
+        const ffmpegProcess = spawn(ffmpegPath!, [
+          '-i', tempInputPath,
+          '-c:v', 'libx264',
+          '-c:a', 'aac',
+          '-y', // Overwrite output file
+          tempOutputPath
+        ]);
+
+        // ffmpegProcess.stdout.on('data', (data) => {
+        //   console.log(`FFmpeg stdout: ${data}`);
+        // });
+
+        // ffmpegProcess.stderr.on('data', (data) => {
+        //   console.log(`FFmpeg stderr: ${data}`);
+        // });
+
+        ffmpegProcess.on('close', (code) => {
+          if (code === 0) {
+            console.log('[DEBUG] FFmpeg conversion complete');
             resolve(null);
-          })
-          .on('error', (err: any) => {
-            console.error('FFmpeg conversion failed:', err);
-            reject(err);
-          });
+          } else {
+            console.error(`FFmpeg process exited with code ${code}`);
+            reject(new Error(`FFmpeg conversion failed with code ${code}`));
+          }
+        });
+
+        ffmpegProcess.on('error', (err) => {
+          console.error('FFmpeg process error:', err);
+          reject(err);
+        });
       });
       console.log('[DEBUG] Converted video to MP4:', tempOutputPath);
 
