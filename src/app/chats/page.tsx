@@ -58,7 +58,7 @@ const generateContent = async (prompt: string, model: string = config.geminiMode
 };
 
 // Function to build interview prompt based on job description
-export const buildInterviewPrompt = (jobDescription: string) => `
+export const buildInterviewPrompt = (jobDescription: string) => {return `
     You are acting as a calm and professional AI interviewer conducting an interview for a candidate applying to a position.
 
     Job Description:
@@ -83,7 +83,7 @@ export const buildInterviewPrompt = (jobDescription: string) => `
     - After the 5 preset questions, ask 2-3 additional questions that are specific to the job description, role requirements, and technical skills mentioned.
     - Focus on skills, experience, and qualities that are specifically mentioned in the job description.
     - If the job description mentions specific technologies, tools, or methodologies, incorporate questions about those.
-`;
+`;}
 
 // Function to format message content with markdown-like syntax
 function formatMessageContent(content: string) {
