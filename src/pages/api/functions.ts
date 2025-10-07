@@ -27,6 +27,8 @@ export default async function handler(
     return res.status(400).json({ error: 'Missing videoUrl in request body' });
   }
 
+  console.log('[DEBUG] Video URL:', videoUrl);
+
   // ✅ 1. Check that the file URL ends with .mp4
   if (!videoUrl.toLowerCase().endsWith('.mp4')) {
     console.warn(`[WARN] Non-MP4 video detected: ${videoUrl}`);
