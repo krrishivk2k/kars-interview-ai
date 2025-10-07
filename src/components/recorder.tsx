@@ -9,7 +9,7 @@ import { onAuthStateChanged, User } from 'firebase/auth';
 import { getFirestore, doc, getDoc } from 'firebase/firestore';
 import { useRouter } from 'next/navigation';
 import { auth, db } from '../config/firebase-config';
-import { buildInterviewPrompt } from '../app/chats/page';
+import { buildInterviewPrompt } from '../utils/interviewPrompt';
 
 
 
