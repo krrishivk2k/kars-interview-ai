@@ -136,7 +136,6 @@ def hand(video_file):
     result = {"hand": final_goodness}
     print(json.dumps(result))
 
-
 def mood(video_path):
     VIDEO_FILE = video_path
     PROCESS_WIDTH = 240
@@ -170,7 +169,7 @@ def mood(video_path):
                     self.stopped = True
                     break
             self.stream.release()
-            
+
         def read(self):
             return self.Q.get()
 
@@ -186,17 +185,31 @@ def mood(video_path):
         rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
         res = face_mesh_model.process(rgb)
         mood_score = None
+        smile_score = None
+
         if res.multi_face_landmarks:
             lm = res.multi_face_landmarks[0].landmark
+            # Mouth and eyes
             mouth_right = np.array([lm[61].x, lm[61].y])
             mouth_left = np.array([lm[291].x, lm[291].y])
             left_eye_inner = np.array([lm[33].x, lm[33].y])
             right_eye_inner = np.array([lm[263].x, lm[263].y])
+
+            # Base metrics
             eye_distance = np.linalg.norm(left_eye_inner - right_eye_inner)
             mouth_width = np.linalg.norm(mouth_left - mouth_right)
+
+            # New: distance from eyes to mouth corners
+            left_eye_to_left_mouth = np.linalg.norm(left_eye_inner - mouth_left)
+            right_eye_to_right_mouth = np.linalg.norm(right_eye_inner - mouth_right)
+
             if eye_distance > 0:
                 mood_score = mouth_width / eye_distance
-        return mood_score
+                # Smile detection — normalized inverse of mouth-corner to eye distance
+                avg_eye_mouth_distance = (left_eye_to_left_mouth + right_eye_to_right_mouth) / 2
+                smile_score = (mouth_width / avg_eye_mouth_distance) if avg_eye_mouth_distance > 0 else None
+
+        return mood_score, smile_score
 
     mp_face_mesh = mp.solutions.face_mesh
 
@@ -212,42 +225,59 @@ def mood(video_path):
             min_tracking_confidence=0.3) as face_mesh:
 
         all_mood_scores = []
+        all_smile_scores = []
         total_frames = 0
         tracking_frame_count = 0
         start_tracking = time.time()
 
-        
         while vs.more():
             frame = vs.read()
             total_frames += 1
             if tracking_frame_count % FRAME_SKIP_RATE == 0:
-                score = analyze_mood(frame, face_mesh)
+                score, smile = analyze_mood(frame, face_mesh)
                 if score is not None:
                     all_mood_scores.append(score)
+                if smile is not None:
+                    all_smile_scores.append(smile)
             tracking_frame_count += 1
 
     vs.stop()
-    
+
     # --- GRACEFUL FAILURE CHECK FOR MOOD ---
     if all_mood_scores:
         overall_avg_score = np.mean(all_mood_scores)
-        if overall_avg_score > 0.75:
+        if overall_avg_score > 0.55:
             overall_mood = "OVERALL: Positive"
-        elif overall_avg_score < 0.45:
+        elif overall_avg_score < 0.35:
             overall_mood = "OVERALL: Negative"
         else:
             overall_mood = "OVERALL: Neutral"
     else:
-        # Log a warning to stderr
         print("[WARNING] Mood analysis failed: No face detected. Returning No Detection.", file=sys.stderr)
         overall_mood = "OVERALL: No Detection"
         overall_avg_score = 0.0
+
+    # --- SMILE / SAD ESTIMATION ---
+    if all_smile_scores:
+        avg_smile_score = np.mean(all_smile_scores)
+        if avg_smile_score > 0.4:
+            smile_status = "Smiling"
+        elif avg_smile_score < 0.2:
+            smile_status = "Sad"
+        else:
+            smile_status = "Neutral Expression"
+    else:
+        smile_status = "No Detection"
+        avg_smile_score = 0.0
     # ---------------------------------------
 
-    # Ensure final JSON print happens successfully
-    result = {"mood": overall_mood, "score": overall_avg_score}
+    result = {
+        "mood": overall_mood,
+        "mood_score": overall_avg_score,
+        "expression": smile_status,
+        "smile_score": avg_smile_score
+    }
     print(json.dumps(result))
-
 
 if __name__ == "__main__":
     if len(sys.argv) < 3:

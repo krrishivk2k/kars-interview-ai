@@ -452,7 +452,7 @@ export default function ChatsPage() {
 
             const prompt = `You are an honest hiring manager at a top firm with 15+ years of experience. Your job is to listen to an interview by a rookie and critique their response to help them improve. Your feedback should be specific, quantifiable, and actionable. Here is the job description for the role:\n\n${jobDesc}\n\n
             Here is the interview transcript:\n${transcript.map(t => `**${t.source}:** ${t.message}`).join('\n\n')}\n\n
-            Here is the analysis of the interview in json format(Make sure to include this mood analysis in your response): ${JSON.stringify(result, null, 2)}\n\n
+            Here is the analysis of the interview in json format(Make sure to include this mood and hand analysis in your response): ${JSON.stringify(result, null, 2)}\n\n
             Please provide detailed feedback on the candidate's performance, strengths, areas for improvement, and specific recommendations based on the job requirements.`;
 
             const text = await generateContent(prompt, config.geminiModel, currentChat.messages);
