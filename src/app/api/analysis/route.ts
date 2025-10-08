@@ -2,7 +2,7 @@ import { spawn } from 'child_process';
 import path from 'path';
 import fs from 'fs';
 import https from 'https';
-import type { NextApiRequest, NextApiResponse } from 'next';
+import { NextRequest, NextResponse } from 'next/server';
 import { tmpdir } from 'os';
 import { exec } from 'child_process'; // 👈 added for optional ffmpeg conversion
 import ffmpegPath from 'ffmpeg-static';
@@ -13,21 +13,12 @@ type AnalysisResult = {
   hand: any;
 };
 
-export default async function handler(
-  req: NextApiRequest,
-  res: NextApiResponse<AnalysisResult | { error: string; details?: string }>
-) {
-  if (req.method !== 'POST') {
-    return res.status(405).json({ error: 'Method Not Allowed' });
-  }
-
-  const { videoUrl } = req.body;
+export async function POST(req: NextRequest) {
+  const { videoUrl } = await req.json();
 
   if (!videoUrl) {
-    return res.status(400).json({ error: 'Missing videoUrl in request body' });
+    return NextResponse.json({ error: 'Missing videoUrl in request body' }, { status: 400 });
   }
-
-  console.log('[DEBUG] Video URL:', videoUrl);
 
   // ✅ 1. Check that the file URL ends with .mp4
   if (!videoUrl.toLowerCase().includes('.mp4')) {
@@ -79,10 +70,10 @@ export default async function handler(
       });
       console.log('[DEBUG] Converted video to MP4:', tempOutputPath);
 
-      return await analyzeVideo(tempOutputPath, res);
+      return await analyzeVideo(tempOutputPath);
     } catch (err: any) {
       console.error('Conversion failed:', err);
-      return res.status(500).json({ error: 'Conversion to MP4 failed', details: err.message });
+      return NextResponse.json({ error: 'Conversion to MP4 failed', details: err.message }, { status: 500 });
     }
   }
 
@@ -93,13 +84,13 @@ export default async function handler(
 
     if (!fs.existsSync(tempPath)) {
       console.error(`[ERROR] Video file not found at ${tempPath}`);
-      return res.status(500).json({ error: 'Video not downloaded' });
+      return NextResponse.json({ error: 'Video not downloaded' }, { status: 500 });
     }
 
     const stats = fs.statSync(tempPath);
     if (stats.size === 0) {
       console.error(`[ERROR] Downloaded video is empty`);
-      return res.status(500).json({ error: 'Video is empty' });
+      return NextResponse.json({ error: 'Video is empty' }, { status: 500 });
     }
 
     // Step 2: Run both Python scripts in parallel
@@ -111,21 +102,21 @@ export default async function handler(
     // Step 3: Clean up the downloaded file
     fs.unlink(tempPath, () => {});
 
-    return res.status(200).json({ mood, hand });
+    return NextResponse.json({ mood, hand });
   } catch (err: any) {
     console.error('Analysis failed:', err);
-    return res.status(500).json({ error: 'Analysis failed', details: err.message });
+    return NextResponse.json({ error: 'Analysis failed', details: err.message }, { status: 500 });
   }
 }
 
 // --- Utility: shared function for analyzing a file ---
-async function analyzeVideo(filePath: string, res: NextApiResponse) {
+async function analyzeVideo(filePath: string) {
   const [mood, hand] = await Promise.all([
     runPython('mood', filePath),
     runPython('hand', filePath),
   ]);
   fs.unlink(filePath, () => {});
-  return res.status(200).json({ mood, hand });
+  return NextResponse.json({ mood, hand });
 }
 
 // --- Utility: Download video file to local disk ---
@@ -153,7 +144,7 @@ function downloadToFile(url: string, outputPath: string): Promise<void> {
 // --- Utility: Run Python script and parse JSON output ---
 function runPython(mode: string, filePath: string): Promise<any> {
   return new Promise((resolve, reject) => {
-    const scriptPath = path.join(process.cwd(), 'src', 'pages', 'api', 'video.py');
+    const scriptPath = path.join(process.cwd(), 'src', 'app', 'api', 'analysis', 'video.py');
     console.log('[DEBUG] Python script path:', scriptPath);
 
     const py = spawn('python3', [scriptPath, mode, filePath]);
