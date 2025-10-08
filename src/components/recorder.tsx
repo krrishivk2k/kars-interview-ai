@@ -359,7 +359,7 @@ export default function CameraRecorder({ onAnalysisComplete, roleInfo }: CameraR
 
    const analyzeVideo = async (videoUrl: any) => {
     
-       const res = await fetch('/api/analysis', {
+       const res = await fetch('/api/functions', {
            method: 'POST',
            headers: { 'Content-Type': 'application/json' },
            body: JSON.stringify({ videoUrl, mode: 'mood' }),
