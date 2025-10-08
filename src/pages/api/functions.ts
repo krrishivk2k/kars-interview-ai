@@ -30,7 +30,7 @@ export default async function handler(
   console.log('[DEBUG] Video URL:', videoUrl);
 
   // ✅ 1. Check that the file URL ends with .mp4
-  if (!videoUrl.toLowerCase().endsWith('.mp4')) {
+  if (!videoUrl.toLowerCase().includes('.mp4')) {
     console.warn(`[WARN] Non-MP4 video detected: ${videoUrl}`);
 
     // 👇 Option A: reject it
