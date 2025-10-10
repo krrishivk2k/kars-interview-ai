@@ -9,5 +9,11 @@
       "source": "/api/analysis",
       "destination": "/api/analysis/route.py"
     }
-  ]
+  ],
+  "builds": [
+    { "src": "*.py", "use": "@vercel/python" }
+  ],
+  "redirects": [
+    { "source": "/api/analysis", "destination": "/api/analysis/route.py" }
+  ]  
 }
