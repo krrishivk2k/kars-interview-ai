@@ -1,4 +1,5 @@
 import { initializeGemini, generateContent, displayResponse } from './shared.js';
+import { config } from './config.js';
 
 async function testGemini() {
   try {
@@ -23,10 +24,8 @@ w    // Initialize the model
     console.error('❌ Error:', error.message);
   }
 }
-async function testEleven() {
-  const eleven = new ElevenLabs(config.elevenAPIKEY);
-  
-}
+// ElevenLabs functionality moved to server-side API route
+// Use /api/elevenlabs endpoint instead
 
 // Run the test
 testGemini();
