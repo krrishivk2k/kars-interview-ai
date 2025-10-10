@@ -1,0 +1,13 @@
+{
+  "functions": {
+    "src/app/api/analysis/route.py": {
+      "runtime": "python3.12"
+    }
+  },
+  "rewrites": [
+    {
+      "source": "/api/analysis",
+      "destination": "/api/analysis/route.py"
+    }
+  ]
+}
