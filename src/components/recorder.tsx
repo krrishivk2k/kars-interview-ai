@@ -359,10 +359,15 @@ const uploadToFirebase = useCallback(async () => {
 
 const analyzeVideo = async (videoUrl: any) => {
     
-    const res = await fetch('/api/analysis', {
+    // Get the actual token by awaiting the Promise
+    const userToken = await auth.currentUser?.getIdToken();
+    console.log('userToken', userToken);
+    console.log('videoUrl', videoUrl);
+
+    const res = await fetch('/api/external-analysis', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ videoUrl, mode: 'mood' }),
+        body: JSON.stringify({ videoUrl, mode: 'mood', userToken }),
         });
     
     if (!res.ok) {
